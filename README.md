@@ -1,12 +1,12 @@
 # catch-a-scammer
-MySQL implementation and testing enviornment for our Database Management Systems group project
+MySQL implementation and testing environment for our Database Management Systems group project
 
 # Project Overview: 
 catch-a-scammer is a game designed as an Open Source Intelligence (OSINT) investigation platform in which the player takes the role of a digital investigator.
 
-The player recieves a simulated cybersecurity case involving a victim, suspicious communication, malicious infrastructure, or another digital clue.
+The player receives a simulated cybersecurity case involving a victim, suspicious communication, malicious infrastructure, or another digital clue.
 
-The player must investigate the availble evidence, search through databases, identify relationships between entities, and ultimately determine who or what is responsible for the incident.
+The player must investigate the available evidence, search through databases, identify relationships between entities, and ultimately determine who or what is responsible for the incident.
 
 # Central Concept
 start with one clue --> investigate it --> discover related entities --> follow the relationships
@@ -17,20 +17,20 @@ start with one clue --> investigate it --> discover related entities --> follow 
 
 # The Core Gameplay Loop:
 
-Step 1 - Recieve a Case
-The player logs into the investigator interface and recieve something like:
+Step 1 - Receive a Case
+The player logs into the investigator interface and receives something like:
 
 CASE #102321
 
 A University employee reports that their banking credentials may have been stolen.
 
-The victim received and email containing:
+The victim received an email containing:
 https://secure-account-example.com/login
 
-The email was recieved on:
+The email was received on:
 March 14th, 2026 - 9:42 PM
 
-The victim rememvers clicking the link.
+The victim remembers clicking the link.
 
 Objective: Identify the malicious infrastructure and determine the actor responsible.
 
@@ -55,7 +55,7 @@ The applications threat-intelligence database.
 [ADD TO EVIDENCE]        [OPEN GRAPH]
 
 NEW CLUE: 203.0.113.42
-- player SHOULD View IP
+- player SHOULD view IP
 - This will show
 APPROX. LOCATION
 United States
@@ -91,8 +91,8 @@ Now they have: Domain A --> IP --> Domain B --> Malware --> Campaign
 At any point the player can open The Evidence Map
 
 # Evidence Map:
-**EVIDENCE DOESNT MEAN CORRECT!!!!!
-The relationship / graph visualization.
+**EVIDENCE DOESN'T MEAN CORRECT!!!!!
+The relationship/graph visualization.
 
                                                         _________________________________
                                                         |                               |
@@ -116,13 +116,13 @@ The relationship / graph visualization.
 [INVESTIGATE NODE] [EVIDENCE] [CASE FILE]
 
 **THINGS TO NOTE**
-Some of these domains and IPs may be noise, they may not be related to the case at all! the more information thrown at the user the better. For replayability and 
+Some of these domains and IPs may be noise; they may not be related to the case at all! The more information thrown at the user, the better. For replayability and 
 making the game more of an investigation like real life.
                                       
 # Web Search
 A fictional Search Engine
 
-Search a URL, maybe it comes up with a threatwatch blog, or a security form. The results will be FICTIONAL
+Search a URL; maybe it comes up with a threatwatch blog, or a security form. The results will be FICTIONAL
 
 "Researchers have linked this campaign to the alias NIGHTFALL"
 Which could lead them to the Threat Actor Database.
@@ -132,7 +132,7 @@ Your fictional people/company database.
 
 Search: NIGHTFALL
 RESULTS:
-Threat ACtor Alias
+Threat Actor Alias
 Known Campiagns: 3
 Known Malware: 2
 Known Infrastructure: 17
@@ -176,6 +176,16 @@ select supporting evidence:
 * Malware
 * Campaign
 * Secondary Domain
+
+Once the player submits their conclusion, the case report will display whether their results were right or wrong 
+and will also display the fictionalized description of how the case was resolved/unresolved.
+
+# HINT SYSTEM:
+Some cases may be harder, and the player might get confused about where to look next and need guidance.
+Players will be able to click on the Hint Button to get suggestions on how to progress further in the case.
+
+
+
 
 --------------------------------------------------------------------------------------------------------------------------------------
 # ROADMAP:
