@@ -1,0 +1,20 @@
+cases — the case file: case code, victim summary, briefing text, whether it's solved, and which entity/campaign is the correct answer.
+
+domains — domain names, whether each is malicious/benign/unknown, and first/last seen dates.
+
+ip_addresses — IP addresses, which hosting provider they belong to, and their ASN/country/region.
+
+hosting_providers — just an id and a company name (e.g. "Example Hosting LLC").
+
+malware — malware family name, type, first observed date, optional hash, and source.
+
+campaigns — named campaigns (e.g. "Operation Example") that group malware and threat actors.
+
+threat_actors — the person/group behind it all, identified by an alias, with notes.
+
+web_articles — fake blog/news snippets, each pointing at a domain or threat actor.
+
+evidence — items the player collects during a case.
+
+entity_relationships — the glue table that says "this thing connects to that thing" for every pair above, 
+so you don't need a separate table for every possible relationship.

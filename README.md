@@ -1,10 +1,6 @@
 # catch-a-scammer
 MySQL implementation and testing enviornment for our Database Management Systems group project
 
-
-# below is a project setup, documentation done by Haley Crousser:
-- core ideas pulled from shared document with Savannah Dean.
-
 # Project Overview: 
 catch-a-scammer is a game designed as an Open Source Intelligence (OSINT) investigation platform in which the player takes the role of a digital investigator.
 
@@ -36,12 +32,7 @@ March 14th, 2026 - 9:42 PM
 
 The victim rememvers clicking the link.
 
-# Objective: Identify the malicious infrastructure and determine the actor responsible.
-
---------------------------------------------------------------------------------------------------------------------------------------
-Step 2 - Investigation Flow:
-
-# Front End Design & Gameloop:
+Objective: Identify the malicious infrastructure and determine the actor responsible.
 
 Creation of a fictional operating system.
 
@@ -187,12 +178,19 @@ select supporting evidence:
 * Secondary Domain
 
 --------------------------------------------------------------------------------------------------------------------------------------
+# ROADMAP:
 
+Step 1: Tables
 
-# Disclaimer:
+------------------
 
-This application is not intended to preform real-world investigations against private individuals.
-Instead it uses:
-1. Public cybersecurity/threat-intelligence datasets for realistic technical information.
-2. Synthetic/ficticious people, victims, companies, addresses, emails, and case information.
-3. Carefully design relationships between those entities to create solvable investigations.
+cases — the case file: case code, victim summary, briefing text, whether it's solved, and which entity/campaign is the correct answer.
+domains — domain names, whether each is malicious/benign/unknown, and first/last seen dates.
+ip_addresses — IP addresses, which hosting provider they belong to, and their ASN/country/region.
+hosting_providers — just an id and a company name (e.g. "Example Hosting LLC").
+malware — malware family name, type, first observed date, optional hash, and source.
+campaigns — named campaigns (e.g. "Operation Example") that group malware and threat actors.
+threat_actors — the person/group behind it all, identified by an alias, with notes.
+web_articles — fake blog/news snippets, each pointing at a domain or threat actor.
+evidence — items the player collects during a case.
+entity_relationships — the glue table that says "this thing connects to that thing" for every pair above, so you don't need a separate table for every possible relationship.
