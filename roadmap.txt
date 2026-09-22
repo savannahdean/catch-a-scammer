@@ -1,20 +1,27 @@
-cases — the case file: case code, victim summary, briefing text, whether it's solved, and which entity/campaign is the correct answer.
+STEP ONE:
+--------------------------------------------------------------------------------------------------------------------------------------------
 
-domains — domain names, whether each is malicious/benign/unknown, and first/last seen dates.
+TABLES NEEDED
 
-ip_addresses — IP addresses, which hosting provider they belong to, and their ASN/country/region.
+cases — the case file itself: case code, victim summary, briefing text, whether it's solved, and which entity/campaign is the correct answer.
 
-hosting_providers — just an id and a company name (e.g. "Example Hosting LLC").
+domains — malicious or related domain names, with a status (malicious, benign, unknown) and first/last seen dates.
 
-malware — malware family name, type, first observed date, optional hash, and source.
+ip_addresses — IP addresses that domains resolve to, including which hosting provider and country/region they belong to.
 
-campaigns — named campaigns (e.g. "Operation Example") that group malware and threat actors.
+hosting_providers — companies that host IPs, just an id and a name.
 
-threat_actors — the person/group behind it all, identified by an alias, with notes.
+malware — malware families, with a type, first observed date, optional hash, and source.
 
-web_articles — fake blog/news snippets, each pointing at a domain or threat actor.
+campaigns — named campaigns that group malware and threat actors together.
 
-evidence — items the player collects during a case.
+threat_actors — the people/groups behind everything, identified by an alias, with notes.
 
-entity_relationships — the glue table that says "this thing connects to that thing" for every pair above, 
-so you don't need a separate table for every possible relationship.
+web_articles — fake blog/news snippets the WebSearch app shows, each pointing at a domain or threat actor.
+
+evidence — items the player collects during the case, tied to a specific case.
+
+entity_relationships — the glue table. It just says "this thing connects to that thing" for every pair above 
+(domain to IP, IP to hosting provider, malware to campaign, and so on), so you don't need a separate table for every possible pairing.
+
+--------------------------------------------------------------------------------------------------------------------------------------------

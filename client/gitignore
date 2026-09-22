@@ -1,0 +1,4 @@
+build/
+*.o
+catch-a-scammer
+catch-a-scammer.exe
