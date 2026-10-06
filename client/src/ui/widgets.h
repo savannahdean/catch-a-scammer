@@ -15,6 +15,13 @@ bool Enabled();
 bool Hover(Rectangle r);
 bool Clicked(Rectangle r);
 
+// Nested clipping. raylib's scissor is a single rectangle, and EndScissorMode
+// turns clipping off entirely, so a widget that clipped itself used to let
+// everything drawn after it escape its window. Push intersects with the
+// current clip; Pop restores the previous one. Use these, never the raw calls.
+void PushClip(Rectangle r);
+void PopClip();
+
 void Panel(Rectangle r, Color bg, Color edge);
 void Bevel(Rectangle r, bool sunken);
 void Divider(float x, float y, float w);

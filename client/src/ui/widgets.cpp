@@ -9,7 +9,33 @@ namespace ui {
 namespace {
 bool g_enabled = true;
 std::vector<std::function<void()>> g_popups;
+std::vector<Rectangle> g_clips;
+
+void ApplyClip(const Rectangle& r) {
+    BeginScissorMode((int)r.x, (int)r.y, (int)std::max(0.0f, r.width),
+                     (int)std::max(0.0f, r.height));
+}
 }  // namespace
+
+void PushClip(Rectangle r) {
+    if (!g_clips.empty()) {
+        const Rectangle& c = g_clips.back();
+        float x0 = std::max(r.x, c.x), y0 = std::max(r.y, c.y);
+        float x1 = std::min(r.x + r.width, c.x + c.width);
+        float y1 = std::min(r.y + r.height, c.y + c.height);
+        r = Rectangle{x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0)};
+    }
+    g_clips.push_back(r);
+    ApplyClip(r);
+}
+
+void PopClip() {
+    if (!g_clips.empty()) g_clips.pop_back();
+    if (g_clips.empty())
+        EndScissorMode();
+    else
+        ApplyClip(g_clips.back());
+}
 
 void SetEnabled(bool enabled) { g_enabled = enabled; }
 bool Enabled() { return g_enabled; }
@@ -140,7 +166,7 @@ bool TextFieldW(TextField& tf, Rectangle r, const std::string& placeholder) {
     }
 
     const float fs = 15.0f;
-    BeginScissorMode((int)r.x + 4, (int)r.y, (int)r.width - 8, (int)r.height);
+    PushClip({r.x + 4, r.y, r.width - 8, r.height});
     if (tf.text.empty() && !tf.focus) {
         theme::Text(theme::UI(), placeholder, r.x + 8.0f,
                     r.y + (r.height - fs) * 0.5f, fs, theme::TEXT_DIM);
@@ -154,7 +180,7 @@ bool TextFieldW(TextField& tf, Rectangle r, const std::string& placeholder) {
             DrawLineEx({cx, r.y + 5}, {cx, r.y + r.height - 5}, 1.0f, theme::TEXT);
         }
     }
-    EndScissorMode();
+    PopClip();
     return submitted;
 }
 
@@ -163,11 +189,11 @@ void BeginScroll(Scroll& s, Rectangle view) {
         float wheel = GetMouseWheelMove();
         if (wheel != 0.0f) s.y -= wheel * 42.0f;
     }
-    BeginScissorMode((int)view.x, (int)view.y, (int)view.width, (int)view.height);
+    PushClip({view.x, view.y, view.width, view.height});
 }
 
 void EndScroll(Scroll& s, Rectangle view, float contentHeight) {
-    EndScissorMode();
+    PopClip();
     s.content = contentHeight;
     float maxScroll = std::max(0.0f, contentHeight - view.height);
     s.y = std::min(std::max(s.y, 0.0f), maxScroll);
@@ -201,7 +227,7 @@ bool Row(Rectangle r, const std::string& text, const std::string& right,
     if (selected)
         DrawRectangleRec({r.x, r.y, 3.0f, r.height}, accent);
 
-    BeginScissorMode((int)r.x, (int)r.y, (int)r.width, (int)r.height);
+    PushClip({r.x, r.y, r.width, r.height});
     theme::Text(theme::Mono(), text, r.x + 12.0f, r.y + (r.height - 14.0f) * 0.5f,
                 14.0f, theme::TEXT);
     if (!right.empty()) {
@@ -209,7 +235,7 @@ bool Row(Rectangle r, const std::string& text, const std::string& right,
         theme::Text(theme::UI(), right, r.x + r.width - w - 14.0f,
                     r.y + (r.height - 12.0f) * 0.5f, 12.0f, accent);
     }
-    EndScissorMode();
+    PopClip();
     return hover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 }
 
@@ -221,10 +247,10 @@ bool ComboW(Combo& c, Rectangle r, const std::vector<std::string>& items,
     std::string label = (c.index >= 0 && c.index < (int)items.size())
                             ? items[c.index] : placeholder;
     Color fg = (c.index >= 0) ? theme::TEXT : theme::TEXT_DIM;
-    BeginScissorMode((int)r.x, (int)r.y, (int)r.width - 24, (int)r.height);
+    PushClip({r.x, r.y, r.width - 24, r.height});
     theme::Text(theme::Mono(), label, r.x + 8.0f, r.y + (r.height - 14.0f) * 0.5f,
                 14.0f, fg);
-    EndScissorMode();
+    PopClip();
 
     Rectangle arrow{r.x + r.width - 22.0f, r.y + 1.0f, 21.0f, r.height - 2.0f};
     DrawRectangleRec(arrow, theme::BTN);
@@ -256,8 +282,7 @@ bool ComboW(Combo& c, Rectangle r, const std::vector<std::string>& items,
             DrawRectangleRec({list.x + 3, list.y + 3, list.width, list.height},
                              Color{0, 0, 0, 50});
             Panel(list, theme::WIN_PANEL, theme::FIELD_EDGE);
-            BeginScissorMode((int)list.x, (int)list.y, (int)list.width,
-                             (int)list.height);
+            PushClip({list.x, list.y, list.width, list.height});
             for (size_t i = 0; i < copy.size(); ++i) {
                 Rectangle rr{list.x, list.y + i * rowH - self->scroll.y,
                              list.width, rowH};
@@ -269,7 +294,7 @@ bool ComboW(Combo& c, Rectangle r, const std::vector<std::string>& items,
                 theme::Text(theme::Mono(), copy[i], rr.x + 10.0f, rr.y + 5.0f, 13.0f,
                             theme::TEXT);
             }
-            EndScissorMode();
+            PopClip();
             float maxS = std::max(0.0f, rowH * copy.size() - list.height);
             if (CheckCollisionPointRec(GetMousePosition(), list))
                 self->scroll.y = std::min(std::max(self->scroll.y -

@@ -35,25 +35,45 @@ struct Edge {
     float confidence = 1.0f;
 };
 
+// Node colours by family: web infrastructure (blues/reds), people and
+// messages (pinks), money (greens), attribution (gold/purple).
 Color KindColor(const std::string& k) {
-    if (k == "domain") return theme::DANGER;
-    if (k == "ip") return theme::ACCENT;
-    if (k == "provider") return Color{88, 108, 130, 255};
-    if (k == "malware") return Color{176, 66, 30, 255};
+    if (k == "domain" || k == "url" || k == "url_scan") return theme::DANGER;
+    if (k == "ip" || k == "asn" || k == "nameserver") return theme::ACCENT;
+    if (k == "provider" || k == "hosting_provider" || k == "registrar") return Color{88, 108, 130, 255};
+    if (k == "certificate" || k == "whois_record" || k == "tracking_id") return Color{60, 130, 110, 255};
+    if (k == "malware" || k == "malware_family" || k == "malware_sample") return Color{176, 66, 30, 255};
     if (k == "campaign") return theme::WARN;
-    if (k == "actor") return theme::NOISE;
+    if (k == "actor" || k == "threat_actor") return theme::NOISE;
     if (k == "person") return theme::OK;
-    if (k == "article") return Color{110, 122, 138, 255};
+    if (k == "persona" || k == "social_post" || k == "image") return Color{196, 72, 120, 255};
+    if (k == "email_message" || k == "email_address" || k == "sms_message" || k == "phone" ||
+        k == "audio_recording" || k == "document")
+        return Color{200, 110, 40, 255};
+    if (k == "payment_account" || k == "crypto_wallet") return Color{20, 120, 70, 255};
+    if (k == "article" || k == "web_article" || k == "complaint" || k == "breach")
+        return Color{110, 122, 138, 255};
     return theme::TEXT_DIM;
 }
 
 std::string KindLabel(const std::string& k) {
     if (k == "ip") return "IP ADDRESS";
-    if (k == "provider") return "HOSTING";
-    if (k == "actor") return "THREAT ACTOR";
-    if (k == "article") return "REPORTING";
+    if (k == "provider" || k == "hosting_provider") return "HOSTING";
+    if (k == "actor" || k == "threat_actor") return "THREAT ACTOR";
+    if (k == "article" || k == "web_article") return "REPORTING";
     if (k == "person") return "PERSON";
+    if (k == "persona") return "PROFILE";
+    if (k == "social_post") return "POST / DM";
+    if (k == "malware_family") return "MALWARE";
+    if (k == "malware_sample") return "FILE";
+    if (k == "email_message") return "EMAIL";
+    if (k == "audio_recording") return "RECORDING";
+    if (k == "payment_account") return "ACCOUNT";
+    if (k == "crypto_wallet") return "WALLET";
+    if (k == "whois_record") return "WHOIS";
+    if (k == "url_scan") return "URL SCAN";
     std::string up = k;
+    std::replace(up.begin(), up.end(), '_', ' ');
     std::transform(up.begin(), up.end(), up.begin(), ::toupper);
     return up;
 }
@@ -305,8 +325,7 @@ class EvidenceMapApp : public App {
 
     // ------------------------------------------------------------ drawing
     void DrawGraph(Rectangle view) {
-        BeginScissorMode((int)view.x, (int)view.y, (int)view.width,
-                         (int)view.height);
+        ui::PushClip({view.x, view.y, view.width, view.height});
 
         // faint grid so panning is legible
         for (float gx = fmodf(pan_.x, 40.0f); gx < view.width; gx += 40.0f)
@@ -376,17 +395,17 @@ class EvidenceMapApp : public App {
             }
 
             if (zoom_ > 0.55f) {
-                BeginScissorMode((int)r.x, (int)r.y, (int)r.width, (int)r.height);
+                ui::PushClip({r.x, r.y, r.width, r.height});
                 theme::Text(theme::UI(), KindLabel(n.kind), r.x + 10.0f,
                             r.y + 4.0f, 9.0f,
                             Color{accent.r, accent.g, accent.b, a});
                 theme::Text(theme::Mono(), n.label, r.x + 10.0f, r.y + 15.0f,
                             12.0f, Color{228, 236, 244, a});
-                EndScissorMode();
+                ui::PopClip();
             }
         }
 
-        EndScissorMode();
+        ui::PopClip();
     }
 
     void DrawSidebar(Session& s, Rectangle side) {
@@ -441,7 +460,10 @@ class EvidenceMapApp : public App {
 
         if (ui::Button({side.x + 14.0f, y, side.width - 28.0f, 30.0f},
                        "INVESTIGATE NODE")) {
-            s.requestOpen(AppForKind(n.kind), n.label);
+            // open the record itself in the tool that understands it
+            s.requestOpen(AppForKind(n.kind),
+                          "@fetch:" + s.url("/api/card/" + std::to_string(n.entityId),
+                                            s.caseParams()));
         }
         y += 38.0f;
         bool pinned = s.isPinned(n.kind, n.entityId);
@@ -462,8 +484,8 @@ class EvidenceMapApp : public App {
         theme::Text(theme::UI(), "LEGEND", side.x + 14.0f, y, 11.0f,
                     Color{120, 150, 180, 255});
         y += 20.0f;
-        const char* kinds[] = {"person", "domain", "ip", "provider",
-                               "malware", "campaign", "actor", "article"};
+        const char* kinds[] = {"domain", "ip", "certificate", "malware", "persona",
+                               "phone", "crypto_wallet", "campaign", "actor", "person"};
         for (const char* k : kinds) {
             DrawRectangleRec({side.x + 14.0f, y + 3.0f, 10.0f, 10.0f},
                              KindColor(k));
@@ -473,10 +495,24 @@ class EvidenceMapApp : public App {
         }
     }
 
+    // mirrors APP_FOR_KIND in server/cards.py
     static std::string AppForKind(const std::string& k) {
-        if (k == "malware") return "malwaredb";
-        if (k == "actor" || k == "person") return "directory";
-        if (k == "campaign" || k == "article") return "websearch";
+        if (k == "malware" || k == "malware_family" || k == "malware_sample") return "malwaredb";
+        if (k == "actor" || k == "threat_actor" || k == "person") return "directory";
+        if (k == "campaign" || k == "article" || k == "web_article") return "websearch";
+        if (k == "persona" || k == "social_post") return "social";
+        if (k == "image") return "reverseimage";
+        if (k == "phone") return "phone";
+        if (k == "sms_message") return "sms";
+        if (k == "document") return "doclab";
+        if (k == "audio_recording") return "audiolab";
+        if (k == "payment_account") return "payments";
+        if (k == "crypto_wallet") return "moneytrail";
+        if (k == "complaint") return "complaints";
+        if (k == "whois_record") return "whois";
+        if (k == "certificate") return "certs";
+        if (k == "url" || k == "url_scan") return "urlscan";
+        if (k == "email_message" || k == "email_address") return "breach";
         return "intelsearch";
     }
 

@@ -37,8 +37,8 @@ class Romance(Scenario):
         plat = rng.choice(["HeartLink (dating)", "Chirper (social)", "Pixgram (photos)"])
         handle = F.handle(rng)
         claimed_name = F.person_name(rng)
-        claimed_job = rng.choice(["offshore oil engineer", "UN field doctor", "merchant-navy captain",
-                                  "contractor deployed overseas", "oncologist with Doctors Without Borders"])
+        claimed_job = rng.choice(["offshore oil engineer", "field doctor with an international aid charity", "merchant-navy captain",
+                                  "contractor deployed overseas", "surgeon on a humanitarian mission"])
         claimed_loc = rng.choice(["currently in Dubai", "on assignment in Ghana", "stationed in Cyprus"])
         scammer = self.persona(handle, plat, display_name=claimed_name, verdict="malicious",
                               claimed_occupation=claimed_job, claimed_location=claimed_loc,
@@ -80,8 +80,8 @@ class Romance(Scenario):
                         f"I feel like we were meant to meet.", self.at(-rng.randint(10, 30)), dm=True)
         method = rng.choice(["gift_card", "p2p_app", "money_transfer", "crypto_exchange"])
         provider = {"gift_card": "GiftRun cards", "p2p_app": "QuickPay", "money_transfer": "WireMoov",
-                    "crypto_exchange": "CoinGate-like exchange"}[method]
-        ident = {"gift_card": f"redeem codes x{rng.randint(3,8)}", "p2p_app": f"${handle}pay",
+                    "crypto_exchange": "Coinvale Exchange"}[method]
+        ident = {"gift_card": self.gift_cards(rng.randint(3, 6)), "p2p_app": f"${handle}pay",
                  "money_transfer": f"ref {F.token(rng,8).upper()}", "crypto_exchange": f"acct-{F.token(rng,6)}"}[method]
         pay = self.payment(method, provider, ident, holder=claimed_name if method != "gift_card" else None,
                           mule=method in ("p2p_app", "money_transfer"), verdict="malicious",
@@ -186,7 +186,7 @@ class AdvanceFee(Scenario):
         self.clue(email, "An unsolicited email promising a large sum after a small upfront 'fee'")
 
         method = rng.choice(["money_transfer", "gift_card", "crypto_exchange"])
-        provider = {"money_transfer": "WireMoov", "gift_card": "GiftRun cards", "crypto_exchange": "CoinGate-like exchange"}[method]
+        provider = {"money_transfer": "WireMoov", "gift_card": "GiftRun cards", "crypto_exchange": "Coinvale Exchange"}[method]
         pay = self.payment(method, provider, f"ref {F.token(rng, 8).upper()}", holder=F.person_name(rng),
                           mule=method == "money_transfer", verdict="malicious", notes="Processing-fee collection point")
         self.slot("payment_target", pay)
@@ -255,9 +255,10 @@ class TechSupport(Scenario):
     def build(self):
         rng = self.rng
         fake_brand = rng.choice(["OneMail Workspace", "CloudDrive Docs"])
-        s = self.site(dict(F.BRANDS).get(fake_brand, "onemail.example") if False else "onemail.example",
+        legit = {b: d for b, d, _ in F.BRANDS}[fake_brand]   # look-alike of the brand the warning names
+        s = self.site(legit,
                       title=f"⚠ {fake_brand} Security Warning — Call Support Immediately",
-                      path="/alert", cdn_allowed=False, host_type="vps")
+                      path="/alert", cdn_allowed=False, host_type="vps", kit_pool=F.FAKE_ALERT_ARTIFACTS)
         self.slot("popup_domain", s.primary_id)
         self.slot("origin_ip", s.origin_id)   # extra supporting slot not scored unless present
         self.slots.pop("origin_ip", None)
@@ -273,7 +274,7 @@ class TechSupport(Scenario):
         self.w.edge(s.landing_id, callback, "calls_back_to", source="urlscope", confidence=2)
 
         method = "gift_card"
-        pay = self.payment(method, "GiftRun cards", f"redeem codes x{rng.randint(4, 10)}", mule=False, verdict="malicious",
+        pay = self.payment(method, "GiftRun cards", self.gift_cards(rng.randint(4, 8)), mule=False, verdict="malicious",
                           notes="Victim read gift-card codes over the phone")
         self.slot("payment_target", pay)
         self.w.edge(callback, pay, "pays_to", source="Victim Report", confidence=2, note="codes read aloud during the call")
@@ -345,8 +346,8 @@ class PigButchering(Scenario):
         self.support(img, "The persona's profile photo")
 
         # fake trading platform (looks like a real exchange)
-        s = self.site("coinbase-like.example", title="MetaTrade Pro — Dashboard", path="/dashboard",
-                      cdn_allowed=True, host_type="vps")
+        s = self.site("trustpeak.example", title="TrustPeak Pro — Dashboard", path="/dashboard",
+                      cdn_allowed=True, host_type="vps", kit_pool=F.FAKE_EXCHANGE_ARTIFACTS)
         # relabel so it reads like a fake exchange rather than a login clone
         self.conn.execute("update domains set is_typosquat_of=%s where entity_id=%s", ("major crypto exchange", s.primary_id))
         self.slot("fake_platform", s.primary_id)
@@ -354,7 +355,7 @@ class PigButchering(Scenario):
 
         dm1 = self.post(scammer, handle, plat, f"Hi {self.victim_first}! Looks like we matched interests. I don't usually "
                         f"DM but your profile stood out.", self.at(-rng.randint(30, 70)), dm=True)
-        dm2 = self.post(scammer, handle, plat, f"My uncle taught me a strategy on MetaTrade Pro — I've been pulling steady "
+        dm2 = self.post(scammer, handle, plat, f"My uncle taught me a strategy on TrustPeak Pro — I've been pulling steady "
                         f"returns. Happy to show you. Start small, you can withdraw anytime.", self.at(-rng.randint(10, 25)), dm=True, verdict="malicious")
         self.w.edge(dm2, s.landing_id, "contains_link", source="Victim Report", confidence=1)
         self.clue(dm1, "Friendly messages from a stranger that slowly turn to a 'can't-miss' crypto platform")
@@ -374,7 +375,7 @@ class PigButchering(Scenario):
             last = nxt
         self.conn.execute("update entities set verdict='suspicious', tags=array['cash-out'] where id=%s", (last,))
         self.slot("cashout_wallet", last)
-        self.complaints([scammer, s.primary_id], [f"Online friend got me into 'MetaTrade Pro', couldn't withdraw anything.",
+        self.complaints([scammer, s.primary_id], [f"Online friend got me into 'TrustPeak Pro', couldn't withdraw anything.",
                         "Investment app showed big gains but wanted 'tax' before any withdrawal."],
                         indicators=[handle, s.primary_fqdn], loss=(2000, 80000))
 
@@ -394,7 +395,7 @@ class PigButchering(Scenario):
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
 
-        briefing = (f"{self.victim} ({self.victim_role}) was befriended online and steered into 'MetaTrade Pro', deposited "
+        briefing = (f"{self.victim} ({self.victim_role}) was befriended online and steered into 'TrustPeak Pro', deposited "
                     f"crypto, saw it grow, then couldn't withdraw. Identify the persona, the fake platform, follow the "
                     f"money to its cash-out, and name the ring.")
         resolution = (f"'{cname}' (@{handle}) steered the victim to {s.primary_fqdn}, a fake exchange registered weeks "

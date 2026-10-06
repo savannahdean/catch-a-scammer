@@ -7,7 +7,7 @@ to bottom, you'll understand not just what each file is but *when it runs* and
 
 Nothing here touches the database or the Python API — this is the client only.
 
-- **19 files, ~3,500 lines, C++17 + raylib.**
+- **19 source files, ~4,200 lines, C++17 + raylib, 21 apps.**
 - The client holds no game data and no answer key. It draws whatever the API
   returns and sends the player's actions back.
 
@@ -18,13 +18,13 @@ Nothing here touches the database or the Python API — this is the client only.
 `main.cpp` opens a window and runs a loop 60 times a second. Every pass, it
 calls `Desktop::Update()` (handle input, move windows, drain queued work) and
 `Desktop::Draw()` (paint everything). `Desktop` is the fake operating system:
-it owns the seven **apps** and the **Session**. Apps never talk to each other
+it owns the 21 **apps** and the **Session**. Apps never talk to each other
 or to the network directly — they read and write the `Session`, and the
 `Session` is what actually calls the API over HTTP. That indirection is the
 whole architecture.
 
 ```
-main.cpp  ──drives──▶  Desktop  ──owns──▶  Apps  (7 windows)
+main.cpp  ──drives──▶  Desktop  ──owns──▶  Apps  (21 windows)
                           │                  │
                           └──owns──▶  Session ◀──all apps read/write this
                                          │
@@ -183,11 +183,18 @@ new app appears everywhere automatically.
 ### The shared record renderers
 
 **`apps/common.h` / `common.cpp`** (71 + 513 lines)
-Four of the seven apps (IntelSearch, Web Search, Directory, MalwareDB) are
-search-and-display tools that show the same *kinds* of record — a domain, an
-IP, a malware family, an actor. Rather than each app re-implementing "draw a
-domain card," those renderers live here once: `rec::Domain`, `rec::Ip`,
-`rec::Malware`, `rec::Campaign`, `rec::Actor`, `rec::Person`, `rec::Article`.
+Eighteen of the apps are search-and-display tools. The original four
+(IntelSearch, Web Search, Directory, MalwareDB) draw fixed record shapes with
+`rec::Domain`, `rec::Ip`, `rec::Malware`, `rec::Campaign`, `rec::Actor`,
+`rec::Person`, `rec::Article`.
+
+Everything newer draws through **`rec::Card`**: a generic record the *server*
+describes (header, key/value fields with a tone, text, raw tool output on a
+terminal-style panel, a detector meter, rows of pivots into other tools, and
+the pin button). That is how one renderer covers social profiles, reverse
+image matches, phone records, voicemails, document metadata, money trails,
+WHOIS snapshots and URL scans, and why the client still holds no game logic.
+`rec::Single` draws one record of either kind.
 
 Two pieces you'll see referenced everywhere:
 
@@ -197,24 +204,31 @@ Two pieces you'll see referenced everywhere:
   polling actually lives for the lookup apps.
 - **`rec::Action`** — a renderer never changes the session directly. When you
   click `[VIEW IP]` or `[ADD TO EVIDENCE]` on a card, the renderer fills in an
-  `Action` (Pin / OpenApp / FetchUrl / OpenGraph) and returns it. The owning
+  `Action` (Pin / OpenApp / FetchUrl / OpenGraph) and returns it. A FetchUrl
+  aimed at another app opens that app with the query `@fetch:<url>`, which
+  tells it to load that one record. The owning
   app calls `rec::Apply(session, action)`, which turns it into a
   `requestOpen`, a `pinEvidence`, etc. This keeps drawing and state-changing
   cleanly separated.
 
 ---
 
-### The seven apps
+### The apps
 
 **`apps/apps_case.cpp`** (466 lines) — **CaseDesk** and **Case Report**.
-CaseDesk is the ticket: it shows the briefing, the NEW CASE / difficulty
-controls, and the hint button. Case Report is the submission form — pick actor,
-campaign, domain, malware, submit, see whether you were right.
+CaseDesk is the ticket: the briefing, the exhibits the victim handed over
+(drawn as cards), the NEW CASE controls (difficulty and scam type) and the hint
+button. Case Report builds its form from the case: one dropdown per conclusion
+the scenario asks for, each listing only what you have discovered, then the
+graded verdict and analyst feedback.
 
 **`apps/apps_lookup.cpp`** (199 lines) — **IntelSearch**, **Web Search**,
-**Directory**, **MalwareDB**. Four apps, one file, because they're the same
-shape: a search box driving a `Finder`, results drawn by the `rec::` renderers.
-They differ only in which API path they hit and which record types they expect.
+**Directory**, **MalwareDB**, and the newer tools: DNS History, WHOIS
+History, CertSearch, URL Scanner, Social Search, Reverse Image, Phone Lookup,
+Spam Texts, Audio Lab, Document Lab, Payments, Money Trail, ScamWatch and
+Breach Lookup. One class, one file, because they're the same shape: a search
+box driving a `Finder`, results drawn by the `rec::` renderers. Each is one
+`Make*()` function naming its API path, placeholder and help text.
 
 **`apps/apps_graph.cpp`** (498 lines) — **Evidence Map**. The relationship
 graph. Pulls the case's discovered nodes and edges and draws them as a
@@ -226,7 +240,7 @@ app.
 ### The shell
 
 **`os/desktop.h` / `desktop.cpp`** (59 + 536 lines)
-The fake OS. Owns the `Session` and the seven apps. Owns a `vector<Win>` — one
+The fake OS. Owns the `Session` and the 21 apps. Owns a `vector<Win>` — one
 window record per app (a rectangle plus flags: open, minimized, maximized,
 dragging, resizing) — and a separate `vector<int> order_` giving front-to-back
 z-order.
@@ -326,7 +340,7 @@ every file. This is the whole architecture in one trace.
 Notice what never happened: no app touched the network, no app touched another
 app, and no renderer touched the session. Every change flowed **app → Session →
 network**, and every cross-app open flowed **app → requestOpen → Desktop**.
-That discipline is what keeps 3,500 lines across 19 files from turning into a
+That discipline is what keeps 4,200 lines across 19 files from turning into a
 tangle.
 
 ---
@@ -356,3 +370,10 @@ tangle.
    **`Session`** (for state/API) and **`requestOpen`** (to open another app).
 3. Drawing is immediate-mode: a widget draws and reacts to input in the same
    call, so "handle input" and "paint" are the same line of code.
+
+## Part 5 — checking it without clicking
+
+`tools/shots.cpp` (`make shots`) is a screenshot harness. It opens a real case
+on a running API, renders CaseDesk, follows the exhibits' pivots into every
+tool they point at, renders each window, the Case Report and the full desktop,
+and saves PNGs. Use it after any rendering change.

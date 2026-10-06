@@ -31,10 +31,24 @@ const char* kMonoCandidates[] = {
     "C:/Windows/Fonts/cour.ttf",
 };
 
+// ASCII + Latin-1 + the punctuation real records contain (dashes, curly quotes,
+// bullets, arrows, the warning sign scam pop-ups use). raylib only bakes the
+// glyphs it is asked for; anything else would draw as '?'.
+std::vector<int> Codepoints() {
+    std::vector<int> cps;
+    for (int c = 32; c < 127; ++c) cps.push_back(c);
+    for (int c = 160; c < 256; ++c) cps.push_back(c);
+    for (int c : {0x2013, 0x2014, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2026,
+                  0x2190, 0x2192, 0x2713, 0x2717, 0x26A0, 0x20AC})
+        cps.push_back(c);
+    return cps;
+}
+
 Font TryLoad(const char* const* candidates, int n, int size) {
+    std::vector<int> cps = Codepoints();
     for (int i = 0; i < n; ++i) {
         if (FileExists(candidates[i])) {
-            Font f = LoadFontEx(candidates[i], size, nullptr, 0);
+            Font f = LoadFontEx(candidates[i], size, cps.data(), (int)cps.size());
             if (f.texture.id != 0) {
                 SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
                 return f;
@@ -111,7 +125,7 @@ float TextWrapped(const Font& f, const std::string& s, Rectangle box, float size
 Color StatusColor(const std::string& status) {
     if (status == "malicious") return DANGER;
     if (status == "suspicious") return WARN;
-    if (status == "benign") return OK;
+    if (status == "benign" || status == "clean") return OK;
     return TEXT_DIM;
 }
 

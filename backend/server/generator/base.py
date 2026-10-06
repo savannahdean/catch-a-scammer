@@ -108,9 +108,11 @@ class Scenario:
         self.registrar = rng.choice(self.registrars)
         self._load_providers()
 
-        code = f"CASE-{self.incident:%Y}-{rng.randint(1000, 9999)}"
+        code, tries = f"CASE-{self.incident:%Y}-{rng.randint(1000, 9999)}", 0
         while conn.execute("select 1 from cases where case_code=%s", (code,)).fetchone():
-            code = f"CASE-{self.incident:%Y}-{rng.randint(1000, 9999)}"
+            tries += 1   # 9,000 four-digit codes a year; widen rather than loop forever
+            hi = 9999 if tries < 30 else 999_999
+            code = f"CASE-{self.incident:%Y}-{rng.randint(1000, hi)}"
         self.case_id = conn.execute(
             """insert into cases(case_code, scenario, difficulty, rng_seed, incident_at, reported_at,
                victim_name, victim_org, victim_role, briefing)
@@ -319,7 +321,7 @@ class Scenario:
     def site(self, legit: str, *, title: str, path: str, sibling_fqdns: list[str] | None = None,
              n_siblings: int | None = None, cdn_allowed: bool = True, leak: bool = True,
              phash: str | None = None, visual_match: str | None = None, sibling_title: str | None = None,
-             host_type: str | None = None) -> Site:
+             host_type: str | None = None, kit_pool: list[str] | None = None) -> Site:
         """A full piece of phishing infrastructure with realistic history and noise."""
         rng, w, p = self.rng, self.w, self.p
         host_type = host_type or rng.choice(["bulletproof", "vps"])
@@ -407,7 +409,7 @@ class Scenario:
         tid = w.ent("tracking_id", tid_code, table="tracking_ids", vendor="analytics", tracking_code=tid_code)
         self.support(tid, "Analytics ID reused across the actor's pages")
         jarm = F.jarm(rng)
-        kit = rng.sample(F.PHISH_KIT_ARTIFACTS, 3)
+        kit = rng.sample(kit_pool or F.PHISH_KIT_ARTIFACTS, 3)
         landing_url = f"https://{primary_fqdn}{path}"
         landing = self.mk_url(primary_id, landing_url, primary_fqdn,
                               {"easy": "malicious", "medium": "malicious"}.get(p.level, "suspicious"))
@@ -581,6 +583,10 @@ class Scenario:
                           country=country, line_type=line_type, carrier=carrier, cnam=cnam, spam_reports=spam,
                           first_reported=(self.at(-self.rng.randint(1, 30)).date() if spam else None))
 
+    def gift_cards(self, n: int) -> str:
+        """The card numbers a victim read out: what they can actually report."""
+        return f"{n} cards ending " + ", ".join(f"{self.rng.randint(1000, 9999)}" for _ in range(n))
+
     def fict_number(self, area: str = "615", toll_free: bool = False) -> str:
         """555-0100..0199 is reserved for fiction in the North American Numbering Plan."""
         while True:
@@ -697,9 +703,8 @@ class Scenario:
                     targeting: str = "higher education") -> UUID:
         """Campaign + vendor attribution + decoys. `anchors` are what the vendor tied to the campaign."""
         rng, w, conn = self.rng, self.w, self.conn
-        cname = F.op_name(rng)
-        while conn.execute("select 1 from campaigns where name=%s", (cname,)).fetchone():
-            cname = F.op_name(rng)
+        cname = F.unique_op_name(rng, lambda n: conn.execute("select 1 from campaigns where name=%s",
+                                                            (n,)).fetchone() is not None)
         camp = w.ent("campaign", cname, verdict="malicious", table="campaigns", name=cname,
                      started_on=self.at(-rng.randint(5, 30)).date(), ended_on=None, objective=self.category,
                      targeting=targeting)
@@ -805,17 +810,33 @@ class Scenario:
             for eid in lead_in:
                 self.chain(eid, "Lead toward the operator's real identity")
         else:
-            # tie the email to the last scam persona already on the chain (romance, pig-butchering, ...)
+            # No registration record to leak. Instead the operator advertised on the forum, and the
+            # ad names an indicator from this case (the scam profile, call-back line, drop account,
+            # or wallet). Searching that indicator finds the ad, and the ad's author is the operator.
             anchor = self.conn.execute(
-                "select entity_id from case_entities where case_id=%s and role='chain' "
-                "and entity_id in (select entity_id from personas) order by hop desc limit 1",
-                (self.case_id,)).fetchone()
-            if not anchor:
-                anchor = self.conn.execute(
-                    "select entity_id from case_entities where case_id=%s and role in ('chain','initial_clue') "
-                    "order by hop desc limit 1", (self.case_id,)).fetchone()
-            w.edge(anchor[0], em, "uses_email", source="BreachIndex", confidence=3,
-                   note="operator reused this email on the account behind the scheme")
+                """select ce.entity_id, e.kind::text, e.value::text from case_entities ce join entities e on e.id=ce.entity_id
+                   where ce.case_id=%s and ce.role='chain'
+                     and e.kind in ('persona','phone','payment_account','crypto_wallet','domain')
+                   order by (e.kind='persona') desc, ce.hop desc limit 1""", (self.case_id,)).fetchone()
+            aid, akind, aval = anchor
+            if akind == "persona":
+                h, plat = self.conn.execute("select handle::text, platform from personas where entity_id=%s", (aid,)).fetchone()
+                ad = (f"selling aged {plat.split(' (')[0]} profiles with full photo sets + chat scripts. "
+                      f"proof of work: @{h}, 2 months live, never banned. bulk discount, escrow only")
+            elif akind == "phone":
+                ad = (f"US toll-free callback lines for rent, clean caller ID, weekly rotation. "
+                      f"test line {self.pretty(aval)}. escrow only")
+            elif akind == "payment_account":
+                prov, ident = self.conn.execute("select provider, identifier from payment_accounts where entity_id=%s",
+                                                (aid,)).fetchone()
+                ad = f"verified drop accounts, US banks, 48h hold max. sample: {prov} {ident}. escrow only"
+            elif akind == "crypto_wallet":
+                ad = f"cashout service TRC20/BTC, 12% fee, same day. send a test to {aval}"
+            else:
+                ad = f"fresh panels on {aval}, bulletproof hosting included. escrow only"
+            fpost = self.post(fp, o["handle"], forum, ad, self.at(-rng.randint(15, 60)), verdict="suspicious")
+            w.edge(fpost, aid, "mentions", source="0xRumors", confidence=3, note="forum ad names a case indicator")
+            self.chain(fpost, "Forum ad by the operator that names this case's indicator")
         self.chain(em, "Operator email, reused across breached sites")
         self.chain(fp, "Criminal-forum persona tied to the campaign")
         self.chain(sp, "Same handle on a personal platform")

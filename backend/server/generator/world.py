@@ -275,9 +275,7 @@ def seed(conn: psycopg.Connection, rng: random.Random, people_csv: Path | None) 
                          (aid, alias, w.source(vendor)))
         # 1-3 historic campaigns; commodity malware appears across many actors
         for _ in range(rng.randint(1, 3)):
-            cname = F.op_name(rng)
-            while cname in used_ops:
-                cname = F.op_name(rng)
+            cname = F.unique_op_name(rng, lambda n: n in used_ops)
             used_ops.add(cname)
             start = now.date() - timedelta(days=rng.randint(250, 900))
             cid = w.ent("campaign", cname, world=True, verdict="malicious", table="campaigns", name=cname,

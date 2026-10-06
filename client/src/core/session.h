@@ -56,7 +56,8 @@ class Session {
     bool popOpenRequest(OpenRequest& out);
 
     // ---- async operations owned by the shell
-    void startNewCase(const std::string& difficulty);
+    // scenario: a key from /scenarios, or "random"
+    void startNewCase(const std::string& difficulty, const std::string& scenario = "random");
     void refreshBrief();
     void refreshEvidence();
     void pinEvidence(const std::string& kind, long long entityId,
@@ -64,6 +65,7 @@ class Session {
     void unpinEvidence(long long evidenceId);
     void pingHealth();
 
+    // ids are unique across kinds, so `kind` is only kept for callers' clarity
     bool isPinned(const std::string& kind, long long entityId) const;
     bool busy() const;
 

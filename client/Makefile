@@ -12,6 +12,9 @@
 #           make check  report which dependency is missing
 #           make run    build and launch
 #           make clean  delete the whole build/ folder
+#           make shots  screenshot harness (tools/shots.cpp): renders every
+#                       tool on a live case. Needs the API running.
+#                       cd <outdir> && <repo>/client/build/shots <dir> <difficulty> <scenario>
 
 CXX      ?= g++
 CXXFLAGS := -std=c++17 -O2 -Wall -Wextra -Isrc
@@ -43,7 +46,7 @@ ifneq ($(wildcard vendor/nlohmann/json.hpp),)
     CXXFLAGS += -Ivendor
 endif
 
-.PHONY: all clean run check
+.PHONY: all clean run check shots
 
 all: $(TARGET)
 
@@ -54,6 +57,12 @@ $(TARGET): $(OBJS)
 $(BUILDDIR)/%.o: src/%.cpp
 	@mkdir -p $(@D)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# everything except main.o, plus the harness's own main
+SHOT_OBJS := $(filter-out $(BUILDDIR)/main.o,$(OBJS))
+shots: $(BUILDDIR)/shots$(suffix $(TARGET))
+$(BUILDDIR)/shots$(suffix $(TARGET)): tools/shots.cpp $(SHOT_OBJS)
+	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 run: $(TARGET)
 	./$(TARGET)

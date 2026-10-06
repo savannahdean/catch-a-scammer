@@ -69,9 +69,9 @@ void Session::pingHealth() {
     healthReq_.start([u]() { return net::Get(u); });
 }
 
-void Session::startNewCase(const std::string& difficulty) {
+void Session::startNewCase(const std::string& difficulty, const std::string& scenario) {
     if (caseReq_.pending()) return;
-    json body{{"difficulty", difficulty}, {"player", playerName}};
+    json body{{"difficulty", difficulty}, {"player", playerName}, {"scenario", scenario}};
     std::string u = url("/api/cases");
     std::string payload = body.dump();
     notify("Requesting a new case file...");
@@ -109,10 +109,10 @@ void Session::unpinEvidence(long long evidenceId) {
 }
 
 bool Session::isPinned(const std::string& kind, long long entityId) const {
+    (void)kind;
     if (!evidence.contains("items") || !evidence["items"].is_array()) return false;
     for (const auto& it : evidence["items"]) {
-        if (jstr(it, "entity_kind") == kind && jint(it, "entity_id") == entityId)
-            return true;
+        if (jint(it, "entity_id") == entityId) return true;
     }
     return false;
 }

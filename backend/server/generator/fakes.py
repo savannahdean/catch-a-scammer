@@ -37,12 +37,16 @@ PHISH_WORDS = ["secure", "account", "verify", "login", "update", "billing", "sup
                "auth", "portal", "signin", "alert", "service", "confirm", "recovery", "id"]
 
 OP_ADJ = ["Crimson", "Silent", "Paper", "Glass", "Hollow", "Velvet", "Broken", "Frozen",
-          "Copper", "Midnight", "Quiet", "Rusted", "Salt", "Static", "Winter", "Ashen"]
+          "Copper", "Midnight", "Quiet", "Rusted", "Salt", "Static", "Winter", "Ashen",
+          "Amber", "Bitter", "Cinder", "Distant", "Faded", "Gilded", "Hidden", "Iron",
+          "Lucid", "Narrow", "Pale", "Restless", "Sunken", "Tangled", "Umber", "Wired"]
 OP_NOUN = ["Ledger", "Harvest", "Lantern", "Tide", "Anchor", "Orchard", "Relay", "Mirror",
-           "Compass", "Kettle", "Signal", "Thread", "Furnace", "Meridian", "Canal", "Hook"]
+           "Compass", "Kettle", "Signal", "Thread", "Furnace", "Meridian", "Canal", "Hook",
+           "Atlas", "Beacon", "Cellar", "Delta", "Ember", "Falcon", "Gate", "Harbor",
+           "Isthmus", "Juniper", "Keystone", "Lattice", "Mosaic", "Needle", "Quarry", "Vessel"]
 
-FORUM_PLATFORMS = ["xss-like forum 'Darkmarket.test'", "carding board 'Vault.test'",
-                   "Telegram-style channel 'logs_shop'", "forum 'Exploitland.test'"]
+FORUM_PLATFORMS = ["underground forum 'Darkmarket.test'", "carding board 'Vault.test'",
+                   "encrypted-messenger channel 'logs_shop'", "forum 'Exploitland.test'"]
 SOCIAL_PLATFORMS = ["GitNest (code hosting)", "Chirper (social)", "Pixgram (photos)",
                     "Linkline (professional)", "Steamy (gaming)"]
 
@@ -65,9 +69,24 @@ JOBS = ["Web Developer", "IT Support Technician", "Freelance Designer", "Student
         "Network Administrator", "QA Tester", "Call Center Agent", "Marketing Assistant"]
 
 PHISH_KIT_ARTIFACTS = [
-    "/admin/panel.php exposed", "telegram bot token in JS", "antibot.php blocklist",
-    "kit zip left in webroot (office365_v4.zip)", "geo-filter .htaccess", "visitors.txt log file",
+    "/admin/panel.php exposed", "messenger bot token in JS", "antibot.php blocklist",
+    "kit zip left in webroot (onemail_v4.zip)", "geo-filter .htaccess", "visitors.txt log file",
     "base64-encoded exfil endpoint in form action", "mobile-only redirect",
+]
+# what a scan of a fake trading platform turns up
+FAKE_EXCHANGE_ARTIFACTS = [
+    "balance and 'profit' computed in page JavaScript, not by any server",
+    "withdraw button disabled in JS until a 'tax' is paid",
+    "deposit address hard-coded in the page source",
+    "live-chat widget opens a private messenger account",
+    "copied exchange template with a renamed logo",
+    "no regulator licence number anywhere on the site",
+]
+# what a scan of a fake security warning turns up
+FAKE_ALERT_ARTIFACTS = [
+    "full-screen request on page load", "audio alarm autoplays",
+    "history.pushState loop (back button disabled)", "fake system-scan animation",
+    "keyboard capture to block closing the tab", "obfuscated JS from a known scareware template",
 ]
 X_MAILERS = ["PHPMailer 6.5.0", "PHPMailer 6.1.4", "Microsoft Outlook 16.0", "BulkMailr 3.2",
              "Swift Mailer 5.4", None]
@@ -105,6 +124,31 @@ def person_name(rng: random.Random) -> str:
 
 def op_name(rng: random.Random) -> str:
     return f"Operation {rng.choice(OP_ADJ)} {rng.choice(OP_NOUN)}"
+
+
+def unique_op_name(rng: random.Random, taken) -> str:
+    """A campaign name nobody has used. `taken(name)` says whether it exists.
+    Vendors number a tracked operation's later waves ("... II"), so once random
+    draws keep colliding the name gets a wave number instead of looping forever."""
+    for _ in range(40):
+        name = op_name(rng)
+        if not taken(name):
+            return name
+    base = op_name(rng)
+    wave = 2
+    while taken(f"{base} {roman(wave)}"):
+        wave += 1
+    return f"{base} {roman(wave)}"
+
+
+def roman(n: int) -> str:
+    out = ""
+    for value, digits in ((1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+                          (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I")):
+        while n >= value:
+            out += digits
+            n -= value
+    return out
 
 
 def benign_domain(rng: random.Random) -> str:

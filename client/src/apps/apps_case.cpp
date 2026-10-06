@@ -1,6 +1,7 @@
 // CaseDesk: where a case arrives and where hints are requested.
 // CaseReport: where the player commits to a conclusion and is graded.
 #include <algorithm>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -41,10 +42,18 @@ class CaseDeskApp : public App {
             }
         }
 
+        PollLists(s);
+
         DrawRectangleRec(c, theme::WIN_BODY);
         if (!s.hasCase()) {
             DrawIntake(s, c);
             return;
+        }
+        if (exhibitsFor_ != s.caseId && !exhibitsReq_.pending()) {
+            exhibitsFor_ = s.caseId;
+            exhibits_ = json::object();
+            std::string u = s.url("/api/cases/" + std::to_string(s.caseId) + "/exhibits");
+            exhibitsReq_.start([u]() { return net::Get(u); });
         }
 
         // ---- ticket header
@@ -54,7 +63,7 @@ class CaseDeskApp : public App {
                     head.y + 12.0f, 22.0f, theme::TITLE_TEXT);
         std::string diff = jstr(s.brief, "difficulty");
         std::transform(diff.begin(), diff.end(), diff.begin(), ::toupper);
-        Color dc = diff == "HARD" ? theme::DANGER
+        Color dc = (diff == "HARD" || diff == "EXPERT") ? theme::DANGER
                    : diff == "MEDIUM" ? theme::WARN : theme::OK;
         ui::Badge({head.x + 14.0f, head.y + 42.0f, 84.0f, 17.0f}, diff, dc);
         std::string st = s.solved() ? "CLOSED" : "OPEN";
@@ -142,14 +151,38 @@ class CaseDeskApp : public App {
                            13.0f, theme::TEXT);
         y += panel.height + 16.0f;
 
+        // what the reporting party handed over
+        ui::SectionLabel("EXHIBITS FROM THE REPORTING PARTY", body.x, y);
+        y += 24.0f;
+        y += theme::TextWrapped(theme::UI(),
+                                "Everything the victim gave you. Pin the exhibit that started "
+                                "it: your evidence chain has to connect back to it.",
+                                {body.x, y, body.width - 20.0f, 60.0f}, 13.0f,
+                                theme::TEXT_DIM);
+        y += 10.0f;
+        rec::Action action;
+        if (exhibitsReq_.pending()) {
+            ui::Spinner({body.x + 20.0f, y + 14.0f}, 10.0f, theme::ACCENT);
+            y += 36.0f;
+        } else if (exhibits_.contains("cards") && exhibits_["cards"].is_array()) {
+            Rectangle area{body.x, y, body.width, body.height};
+            for (const auto& card : exhibits_["cards"]) {
+                y = rec::Card(s, card, area, y, action);
+                y += 8.0f;
+                ui::Divider(body.x, y, body.width - 14.0f);
+                y += 14.0f;
+            }
+        }
+
         ui::EndScroll(scroll_, body, y - (body.y - scroll_.y));
+        rec::Apply(s, action);
 
         if (showIntake_) DrawIntakeOverlay(s, c);
     }
 
   private:
     void DrawIntake(Session& s, Rectangle c) {
-        Rectangle card{c.x + c.width * 0.5f - 280.0f, c.y + 70.0f, 560.0f, 340.0f};
+        Rectangle card{c.x + c.width * 0.5f - 290.0f, c.y + 50.0f, 580.0f, 400.0f};
         DrawRectangleRec(card, theme::WIN_PANEL);
         DrawRectangleLinesEx(card, 1.0f, Color{206, 214, 224, 255});
         DrawRectangleRec({card.x, card.y, card.width, 4.0f}, theme::ACCENT);
@@ -161,36 +194,90 @@ class CaseDeskApp : public App {
         theme::TextWrapped(
             theme::UI(),
             "Pick a difficulty and the queue will hand you a fresh incident. "
-            "Cases are generated when you ask for one, so the infrastructure, "
-            "the malware family and the actor are different every time.\n\n"
-            "Higher difficulty means more co-hosted domains that are not "
-            "involved, more complete decoy chains, and a larger article corpus "
-            "to read through.",
+            "Cases are generated when you ask for one, so the people, accounts, "
+            "infrastructure and the crew behind it differ every time.\n\n"
+            "Higher difficulty means more decoys, attacker infrastructure that "
+            "nobody has flagged yet, planted false flags, and on HARD and "
+            "EXPERT, unmasking the real person running the scheme.",
             {card.x + 24.0f, card.y + 76.0f, card.width - 48.0f, 140.0f}, 14.0f,
             theme::TEXT_DIM);
 
-        const char* labels[3] = {"EASY", "MEDIUM", "HARD"};
-        const char* keys[3] = {"easy", "medium", "hard"};
-        for (int i = 0; i < 3; ++i) {
-            Rectangle b{card.x + 24.0f + i * 172.0f, card.y + 232.0f, 160.0f, 40.0f};
-            if (ui::Button(b, labels[i], !s.busy())) {
-                s.startNewCase(keys[i]);
-                showIntake_ = false;
-            }
-        }
+        theme::Text(theme::UI(), "SCAM TYPE", card.x + 24.0f, card.y + 222.0f, 12.0f,
+                    theme::ACCENT_DARK);
+        DifficultyButtons(s, card.x + 24.0f, card.y + 296.0f, 128.0f, 40.0f);
+        ScenarioCombo(s, {card.x + 24.0f, card.y + 240.0f, card.width - 48.0f, 28.0f});
         if (s.busy()) {
-            ui::Spinner({card.x + card.width * 0.5f, card.y + 300.0f}, 12.0f,
+            ui::Spinner({card.x + card.width * 0.5f, card.y + 366.0f}, 12.0f,
                         theme::ACCENT);
         } else if (!s.online && !s.offlineReason.empty()) {
             theme::Text(theme::UI(), "Service: " + s.offlineReason,
-                        card.x + 24.0f, card.y + 294.0f, 12.0f, theme::DANGER);
+                        card.x + 24.0f, card.y + 360.0f, 12.0f, theme::DANGER);
+        }
+    }
+
+    void DifficultyButtons(Session& s, float x, float y, float w, float h) {
+        const char* labels[4] = {"EASY", "MEDIUM", "HARD", "EXPERT"};
+        const char* keys[4] = {"easy", "medium", "hard", "expert"};
+        for (int i = 0; i < 4; ++i) {
+            if (ui::Button({x + i * (w + 8.0f), y, w, h}, labels[i], !s.busy())) {
+                s.startNewCase(keys[i], ScenarioKey());
+                showIntake_ = false;
+            }
+        }
+    }
+
+    // "Random" first, then every scam type the server offers (GET /scenarios).
+    void ScenarioCombo(Session& s, Rectangle r) {
+        if (scnKeys_.empty() && !scenariosReq_.pending() && !scenariosAsked_) {
+            scenariosAsked_ = true;
+            std::string u = s.url("/scenarios");
+            scenariosReq_.start([u]() { return net::Get(u); });
+        }
+        std::vector<std::string> items{"Random (the queue decides)"};
+        items.insert(items.end(), scnLabels_.begin(), scnLabels_.end());
+        if (scnCombo_.index < 0) scnCombo_.index = 0;
+        ui::ComboW(scnCombo_, r, items, "Random");
+    }
+
+    std::string ScenarioKey() const {
+        if (scnCombo_.index <= 0 || scnCombo_.index > (int)scnKeys_.size()) return "random";
+        return scnKeys_[scnCombo_.index - 1];
+    }
+
+    void PollLists(Session& s) {
+        if (exhibitsReq_.ready()) {
+            net::Response r = exhibitsReq_.take();
+            if (r.ok()) {
+                try {
+                    exhibits_ = json::parse(r.body);
+                } catch (const std::exception&) {
+                    s.notify("Could not read the exhibits.", true);
+                }
+            }
+        }
+        if (scenariosReq_.ready()) {
+            net::Response r = scenariosReq_.take();
+            if (!r.ok()) {
+                scenariosAsked_ = false;
+                return;
+            }
+            try {
+                json list = json::parse(r.body);
+                scnKeys_.clear();
+                scnLabels_.clear();
+                for (const auto& sc : list) {
+                    scnKeys_.push_back(jstr(sc, "key"));
+                    scnLabels_.push_back(jstr(sc, "title"));
+                }
+            } catch (const std::exception&) {
+            }
         }
     }
 
     void DrawIntakeOverlay(Session& s, Rectangle c) {
         DrawRectangleRec(c, Color{0, 0, 0, 120});
-        Rectangle card{c.x + c.width * 0.5f - 240.0f,
-                       c.y + c.height * 0.5f - 110.0f, 480.0f, 220.0f};
+        Rectangle card{c.x + c.width * 0.5f - 280.0f,
+                       c.y + c.height * 0.5f - 130.0f, 560.0f, 260.0f};
         DrawRectangleRec(card, theme::WIN_PANEL);
         DrawRectangleLinesEx(card, 1.0f, theme::WIN_BORDER);
         theme::Text(theme::UI(), "Request a new case?", card.x + 22.0f,
@@ -200,42 +287,51 @@ class CaseDeskApp : public App {
                            "switch to the new one.",
                            {card.x + 22.0f, card.y + 48.0f, card.width - 44.0f, 60.0f},
                            13.0f, theme::TEXT_DIM);
-        const char* labels[3] = {"EASY", "MEDIUM", "HARD"};
-        const char* keys[3] = {"easy", "medium", "hard"};
-        for (int i = 0; i < 3; ++i) {
-            Rectangle b{card.x + 22.0f + i * 148.0f, card.y + 112.0f, 136.0f, 34.0f};
-            if (ui::Button(b, labels[i], !s.busy())) {
-                s.startNewCase(keys[i]);
-                showIntake_ = false;
-            }
-        }
-        if (ui::Button({card.x + card.width - 110.0f, card.y + 162.0f, 88.0f, 28.0f},
+        DifficultyButtons(s, card.x + 22.0f, card.y + 140.0f, 122.0f, 34.0f);
+        ScenarioCombo(s, {card.x + 22.0f, card.y + 96.0f, card.width - 44.0f, 28.0f});
+        if (ui::Button({card.x + card.width - 110.0f, card.y + 202.0f, 88.0f, 28.0f},
                        "CANCEL")) {
             showIntake_ = false;
         }
     }
 
     ui::Scroll scroll_;
-    net::Async hintReq_;
+    net::Async hintReq_, exhibitsReq_, scenariosReq_;
+    json exhibits_ = json::object();
+    long long exhibitsFor_ = -1;
+    std::vector<std::string> scnKeys_, scnLabels_;
+    ui::Combo scnCombo_;
+    bool scenariosAsked_ = false;
     bool showIntake_ = false;
 };
 
 // =================================================================== report
 
+// The form is built from the case: one field per conclusion the scenario asks
+// for (GET /api/cases/{id}/report-options). Each field only lists entities of
+// that kind the player has actually surfaced, so nothing can be guessed.
 class CaseReportApp : public App {
   public:
     std::string Id() const override { return "casereport"; }
     std::string Title() const override { return "Case Report - Final Conclusion"; }
     std::string Glyph() const override { return "CR"; }
     Color Accent() const override { return theme::WARN; }
-    Vector2 DefaultSize() const override { return Vector2{760.0f, 620.0f}; }
+    Vector2 DefaultSize() const override { return Vector2{780.0f, 660.0f}; }
 
-    void OnOpen(Session& s, const std::string&) override { LoadOptions(s); }
+    void OnOpen(Session& s, const std::string&) override {
+        LoadOptions(s);
+        s.refreshEvidence();
+    }
 
     void Draw(Session& s, Rectangle c, bool active) override {
         (void)active;
         PollOptions(s);
         PollSubmit(s);
+        if (loadedFor_ != s.caseId) {   // a new case arrived while the window was open
+            verdict_ = json::object();
+            fields_.clear();
+            LoadOptions(s);
+        }
 
         DrawRectangleRec(c, theme::WIN_BODY);
         if (!s.hasCase()) {
@@ -255,24 +351,30 @@ class CaseReportApp : public App {
         y += 26.0f;
         y += theme::TextWrapped(
             theme::UI(),
-            "You can only name entities you have actually surfaced during the "
-            "investigation. Pinned evidence adjusts your score: supporting "
-            "records add, irrelevant ones subtract.",
+            "Each field lists only what you have surfaced in your tools. Your "
+            "pinned evidence must connect the first exhibit to every conclusion: "
+            "unsupported answers and red herrings on the board cost points.",
             {body.x, y, body.width - 20.0f, 80.0f}, 13.0f, theme::TEXT_DIM);
         y += 14.0f;
 
-        if (optionsReq_.pending()) {
+        int filled = 0;
+        if (optionsReq_.pending() && fields_.empty()) {
             ui::Spinner({body.x + 20.0f, y + 16.0f}, 12.0f, theme::ACCENT);
             theme::Text(theme::UI(), "Loading your findings...", body.x + 44.0f,
                         y + 10.0f, 13.0f, theme::TEXT_DIM);
             y += 44.0f;
         } else {
-            y = Dropdown(s, "WHO IS RESPONSIBLE?", "actors", actorCombo_, body, y);
-            y = Dropdown(s, "ASSOCIATED CAMPAIGN", "campaigns", campaignCombo_,
-                         body, y);
-            y = Dropdown(s, "PRIMARY MALICIOUS DOMAIN", "domains", domainCombo_,
-                         body, y);
-            y = Dropdown(s, "MALWARE FAMILY", "malware", malwareCombo_, body, y);
+            for (Field& f : fields_) {
+                std::string label = f.label;
+                std::transform(label.begin(), label.end(), label.begin(), ::toupper);
+                theme::Text(theme::UI(), label, body.x, y, 12.0f, theme::ACCENT_DARK);
+                y += 18.0f;
+                ui::ComboW(f.combo, {body.x, y, std::min(body.width - 20.0f, 520.0f), 28.0f},
+                           f.labels, f.labels.empty() ? "(nothing of this kind found yet)"
+                                                      : "select...");
+                if (f.combo.index >= 0) ++filled;
+                y += 40.0f;
+            }
         }
 
         y += 6.0f;
@@ -283,6 +385,7 @@ class CaseReportApp : public App {
             for (const auto& it : s.evidence["items"]) {
                 Rectangle row{body.x, y, body.width - 14.0f, theme::ROW_H};
                 std::string kind = jstr(it, "entity_kind");
+                std::replace(kind.begin(), kind.end(), '_', ' ');
                 std::transform(kind.begin(), kind.end(), kind.begin(), ::toupper);
                 if (ui::Row(row, jstr(it, "label"), kind + "   UNPIN", false,
                             theme::TEXT_DIM)) {
@@ -293,26 +396,27 @@ class CaseReportApp : public App {
         } else {
             y += theme::TextWrapped(
                 theme::UI(),
-                "Nothing pinned. You can still submit, but a report with no "
-                "supporting records scores lower.",
+                "Nothing pinned. You can still submit, but conclusions with no "
+                "supporting chain score lower.",
                 {body.x, y, body.width - 20.0f, 60.0f}, 13.0f, theme::TEXT_DIM);
         }
         y += 18.0f;
 
-        bool complete = actorCombo_.index >= 0 && campaignCombo_.index >= 0 &&
-                        domainCombo_.index >= 0 && malwareCombo_.index >= 0;
+        bool complete = !fields_.empty() && filled == (int)fields_.size();
         if (ui::Button({body.x, y, 200.0f, 36.0f}, "SUBMIT REPORT",
                        complete && !s.solved() && !submitReq_.pending())) {
             Submit(s);
         }
-        if (ui::Button({body.x + 210.0f, y, 150.0f, 36.0f}, "REFRESH FINDINGS",
+        if (ui::Button({body.x + 210.0f, y, 170.0f, 36.0f}, "REFRESH FINDINGS",
                        !optionsReq_.pending())) {
             LoadOptions(s);
             s.refreshEvidence();
         }
         if (!complete && !s.solved()) {
-            theme::Text(theme::UI(), "All four fields are required.",
-                        body.x + 374.0f, y + 12.0f, 13.0f, theme::TEXT_DIM);
+            theme::Text(theme::UI(),
+                        std::to_string(filled) + " of " + std::to_string(fields_.size()) +
+                            " conclusions filled.",
+                        body.x + 394.0f, y + 12.0f, 13.0f, theme::TEXT_DIM);
         }
         y += 50.0f;
 
@@ -322,19 +426,16 @@ class CaseReportApp : public App {
     }
 
   private:
-    float Dropdown(Session& s, const std::string& label, const char* key,
-                   ui::Combo& combo, Rectangle body, float y) {
-        (void)s;
-        theme::Text(theme::UI(), label, body.x, y, 12.0f, theme::ACCENT_DARK);
-        y += 18.0f;
-        std::vector<std::string>& items = labels_[key];
-        ui::ComboW(combo, {body.x, y, std::min(body.width - 20.0f, 430.0f), 28.0f},
-                   items, items.empty() ? "(nothing discovered yet)" : "select...");
-        return y + 40.0f;
-    }
+    struct Field {
+        std::string key, label;
+        std::vector<std::string> labels;
+        std::vector<long long> ids;
+        ui::Combo combo;
+    };
 
     void LoadOptions(Session& s) {
         if (!s.hasCase() || optionsReq_.pending()) return;
+        loadedFor_ = s.caseId;
         std::string u = s.url("/api/cases/" + std::to_string(s.caseId) +
                               "/report-options");
         optionsReq_.start([u]() { return net::Get(u); });
@@ -347,36 +448,43 @@ class CaseReportApp : public App {
             s.notify("Could not load your findings.", true);
             return;
         }
+        json opts;
         try {
-            options_ = json::parse(r.body);
+            opts = json::parse(r.body);
         } catch (const std::exception&) {
             return;
         }
-        for (const char* key : {"actors", "campaigns", "domains", "malware"}) {
-            labels_[key].clear();
-            ids_[key].clear();
-            if (!options_.contains(key) || !options_[key].is_array()) continue;
-            for (const auto& o : options_[key]) {
-                labels_[key].push_back(jstr(o, "label"));
-                ids_[key].push_back(jint(o, "entity_id"));
+        // keep each field's current pick if it is still offered
+        std::vector<Field> next;
+        if (opts.contains("fields") && opts["fields"].is_array()) {
+            for (const auto& jf : opts["fields"]) {
+                Field f;
+                f.key = jstr(jf, "key");
+                f.label = jstr(jf, "label");
+                if (jf.contains("options") && jf["options"].is_array()) {
+                    for (const auto& o : jf["options"]) {
+                        f.labels.push_back(jstr(o, "label"));
+                        f.ids.push_back(jint(o, "entity_id"));
+                    }
+                }
+                for (const Field& old : fields_) {
+                    if (old.key != f.key || old.combo.index < 0) continue;
+                    long long picked = old.ids[old.combo.index];
+                    for (size_t i = 0; i < f.ids.size(); ++i)
+                        if (f.ids[i] == picked) f.combo.index = (int)i;
+                }
+                next.push_back(std::move(f));
             }
         }
-        actorCombo_.index = campaignCombo_.index = -1;
-        domainCombo_.index = malwareCombo_.index = -1;
-    }
-
-    long long Pick(const char* key, const ui::Combo& c) const {
-        auto it = ids_.find(key);
-        if (it == ids_.end() || c.index < 0 || c.index >= (int)it->second.size())
-            return 0;
-        return it->second[c.index];
+        fields_ = std::move(next);
     }
 
     void Submit(Session& s) {
-        json body{{"actor_id", Pick("actors", actorCombo_)},
-                  {"campaign_id", Pick("campaigns", campaignCombo_)},
-                  {"domain_id", Pick("domains", domainCombo_)},
-                  {"malware_id", Pick("malware", malwareCombo_)}};
+        json answers = json::object();
+        for (const Field& f : fields_)
+            if (f.combo.index >= 0 && f.combo.index < (int)f.ids.size())
+                answers[f.key] = f.ids[f.combo.index];
+        json body{{"answers", answers}};
         std::string u = s.url("/api/cases/" + std::to_string(s.caseId) + "/submit");
         std::string payload = body.dump();
         submitReq_.start([u, payload]() { return net::Post(u, payload); });
@@ -399,7 +507,9 @@ class CaseReportApp : public App {
         if (jbool(verdict_, "is_correct")) {
             s.notify("Case solved. Score: " + std::to_string(jint(verdict_, "score")));
         } else {
-            s.notify("Report returned. Check the field breakdown.", true);
+            s.notify("Report returned. " + std::to_string(jint(verdict_, "correct_count")) +
+                         " of " + std::to_string(jint(verdict_, "total")) + " correct.",
+                     true);
         }
         s.refreshBrief();
     }
@@ -423,15 +533,17 @@ class CaseReportApp : public App {
 
         if (verdict_.contains("verdicts") && verdict_["verdicts"].is_array()) {
             for (const auto& v : verdict_["verdicts"]) {
+                // on HARD/EXPERT a returned report does not say which field is wrong
+                bool known = v.contains("correct") && v["correct"].is_boolean();
                 bool good = jbool(v, "correct");
+                Color c = !known ? theme::TEXT_DIM : good ? theme::OK : theme::DANGER;
                 Rectangle row{body.x, y, body.width - 14.0f, 24.0f};
-                theme::Text(theme::UI(), good ? "OK " : "XX ", row.x, row.y + 4.0f,
-                            13.0f, good ? theme::OK : theme::DANGER);
-                theme::Text(theme::UI(), jstr(v, "field"), row.x + 30.0f,
-                            row.y + 4.0f, 13.0f, theme::TEXT_DIM);
-                theme::Text(theme::Mono(), jstr(v, "submitted", "(none)"),
-                            row.x + 220.0f, row.y + 4.0f, 13.0f,
-                            good ? theme::TEXT : theme::DANGER);
+                theme::Text(theme::UI(), !known ? "?? " : good ? "OK " : "XX ", row.x,
+                            row.y + 4.0f, 13.0f, c);
+                theme::Text(theme::UI(), jstr(v, "field"), row.x + 30.0f, row.y + 4.0f,
+                            13.0f, theme::TEXT_DIM);
+                theme::Text(theme::Mono(), jstr(v, "submitted", "(none)"), row.x + 300.0f,
+                            row.y + 4.0f, 13.0f, known && !good ? theme::DANGER : theme::TEXT);
                 y += 24.0f;
             }
             y += 10.0f;
@@ -448,16 +560,28 @@ class CaseReportApp : public App {
                            {card.x + 16.0f, card.y + 14.0f, card.width - 32.0f,
                             h + 2},
                            13.0f, theme::TEXT);
-        return y + card.height + 14.0f;
+        y += card.height + 14.0f;
+
+        // what the desk wants you to learn from this case
+        if (verdict_.contains("notes") && verdict_["notes"].is_array() &&
+            !verdict_["notes"].empty()) {
+            ui::SectionLabel("ANALYST FEEDBACK", body.x, y);
+            y += 24.0f;
+            for (const auto& n : verdict_["notes"]) {
+                y += theme::TextWrapped(theme::UI(), "- " + n.get<std::string>(),
+                                        {body.x, y, body.width - 20.0f, 200.0f}, 13.0f,
+                                        theme::TEXT);
+                y += 4.0f;
+            }
+        }
+        return y + 10.0f;
     }
 
     ui::Scroll scroll_;
-    ui::Combo actorCombo_, campaignCombo_, domainCombo_, malwareCombo_;
+    std::vector<Field> fields_;
     net::Async optionsReq_, submitReq_;
-    json options_ = json::object();
     json verdict_ = json::object();
-    std::map<std::string, std::vector<std::string>> labels_;
-    std::map<std::string, std::vector<long long>> ids_;
+    long long loadedFor_ = -1;
 };
 
 }  // namespace

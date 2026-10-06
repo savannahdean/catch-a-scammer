@@ -15,7 +15,7 @@ struct Action {
         None,
         Pin,
         OpenApp,   // app + query
-        FetchUrl,  // absolute url, replaces the app's current result
+        FetchUrl,  // absolute url; shown in `app` (the current window if it is that app)
         OpenGraph
     } kind = None;
 
@@ -56,6 +56,15 @@ float Campaign(Session& s, const json& d, Rectangle box, float y, Action& a);
 float Actor(Session& s, const json& d, Rectangle box, float y, Action& a);
 float Person(Session& s, const json& d, Rectangle box, float y, Action& a);
 float Article(Session& s, const json& d, Rectangle box, float y, Action& a);
+
+// A generic record "card" described entirely by the server (fields, text,
+// raw output, meters, rows of pivots, the pin). Every tool added for the
+// non-phishing scams draws through this one renderer.
+float Card(Session& s, const json& c, Rectangle box, float y, Action& a);
+
+// A single record from /api/card/{id} or /api/intel/*: a legacy record
+// (has "kind") or a card (has "card"). Returns y unchanged if neither.
+float Single(Session& s, const json& d, Rectangle box, float y, Action& a);
 
 // Renders a whole SearchResponse envelope in a fixed order.
 float Envelope(Session& s, const json& env, Rectangle box, float y, Action& a);

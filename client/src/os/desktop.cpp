@@ -320,10 +320,9 @@ void Desktop::DrawWindows() {
 
         // content
         ui::SetEnabled(active);
-        BeginScissorMode((int)w.rect.x, (int)w.rect.y, (int)w.rect.width,
-                         (int)w.rect.height);
+        ui::PushClip({w.rect.x, w.rect.y, w.rect.width, w.rect.height});
         app->Draw(session_, w.rect, active);
-        EndScissorMode();
+        ui::PopClip();
 
         // resize grip
         Vector2 g{w.rect.x + w.rect.width - 4.0f, w.rect.y + w.rect.height - 4.0f};
@@ -373,10 +372,10 @@ void Desktop::DrawTaskbar() {
                                                  : Color{30, 40, 52, 255});
         DrawRectangleRec({b.x, b.y + b.height - 3.0f, b.width, 3.0f},
                          apps_[i]->Accent());
-        BeginScissorMode((int)b.x, (int)b.y, (int)b.width - 8, (int)b.height);
+        ui::PushClip({b.x, b.y, b.width - 8, b.height});
         theme::Text(theme::UI(), cap, b.x + 10.0f, b.y + 7.0f, 13.0f,
                     Color{216, 228, 240, 255});
-        EndScissorMode();
+        ui::PopClip();
         if (ui::Clicked(b)) {
             if (activeWin) {
                 wins_[i].minimized = true;

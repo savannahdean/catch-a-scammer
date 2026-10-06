@@ -227,7 +227,7 @@ class Whaling(Scenario):
         self.clue(email, "An urgent, confidential wire request appearing to come from a university executive")
 
         # money trail: mule -> exchange -> wallet
-        exch = self.payment("crypto_exchange", "CoinGate-like exchange", f"acct-{F.token(rng, 6)}", mule=False, verdict="suspicious")
+        exch = self.payment("crypto_exchange", "Coinvale Exchange", f"acct-{F.token(rng, 6)}", mule=False, verdict="suspicious")
         wallet = self.wallet("tron")
         self.w.edge(mule, exch, "transfers_to", start=self.at(1), source="ScamWatch Portal", confidence=3,
                     note="funds moved out within 48h")
@@ -402,7 +402,7 @@ class Smishing(Scenario):
         self.slot("primary_domain", s.primary_id)
         self.slot("origin_ip", s.origin_id)
         number = self.fict_number(rng.choice(["629", "615", "931"]))
-        sender = self.phone(number, line_type="voip", carrier=rng.choice(["Bandwidth-like VoIP", "Twilio-like VoIP"]),
+        sender = self.phone(number, line_type="voip", carrier=rng.choice(["Wavelink VoIP", "Callgrid VoIP"]),
                            cnam=None, spam=rng.randint(3, 40), verdict="malicious")
         self.slot("sender_number", sender)
         shortlink = f"https://mdst.ly/{F.token(rng, 5)}"

@@ -79,45 +79,73 @@ look-alike handle planted to punish jumping to conclusions.
 Adding scam #12 is one class in `server/generator/scenarios/` plus a line in
 `registry.py`; the tools, graph, scoring, and logging all work unchanged.
 
-## The desktop client (compatibility layer)
+## The desktop client (`/api`, server/compat.py + server/cards.py)
 
-The raylib desktop client in your `client/` was written against the original
-phishing-only API: **integer** case IDs, `/api/...` routes, and a flat record
-shape (`domain_name`, `ip_address`, `associated_ips`, …). `server/compat.py`
-exposes exactly that dialect and translates every call to the current
-UUID/entity backend, so **the existing client runs unchanged** — point it at
-this server and play:
+The raylib game in the repo's top-level `client/` talks only to the `/api/...`
+routes. It uses **integer** ids (the `seq` identity column every case and
+entity gets on creation, next to its UUID) and is a thin renderer: it holds no game
+data and no answer key. Run it against this server:
 
 ```
 ./catch-a-scammer --api http://127.0.0.1:8000
 ```
 
-What the compat layer maps, app by app:
+Every tool answers a search with one envelope:
+`{"query", "found", "message", "cards": [...], ...}`. The original four tools
+also return their older record lists (`domains`, `ips`, `malware`, `actors`,
+`persons`, `articles`). All newer tools return **cards**: server-described
+records (fields, text, raw tool output, detector meters, rows of pivots into
+other tools, the pin button) built in `server/cards.py`, which the client draws
+with one renderer. A new tool is one route, one builder, and one line in the
+client's `apps_lookup.cpp`.
 
-| Client app   | Client call (`/api/...`)        | What it returns |
-|--------------|---------------------------------|-----------------|
-| CaseDesk     | `POST /api/cases`, `GET /api/cases/{id}`, `POST .../hint` | brief with an `entry_domain`, hints |
-| IntelSearch  | `GET /api/intel`, `/api/intel/domain/{id}`, `/api/intel/ip/{id}` | domain & IP records |
-| MalwareDB    | `GET /api/malware`              | malware-family records |
-| Directory    | `GET /api/directory`            | actors + people |
-| Web Search   | `GET /api/websearch`            | fictional articles |
-| Evidence Map | `GET /api/cases/{id}/graph`     | nodes + edges from pinned evidence |
-| Case Report  | `GET .../report-options`, `POST .../submit` | dropdown options + graded verdict |
-| (all)        | `GET/POST/DELETE .../evidence`  | the evidence board |
+| Client app | Route (`/api/...`) | What a real analyst gets from it |
+|---|---|---|
+| CaseDesk | `POST cases`, `GET cases/{n}`, `GET cases/{n}/exhibits`, `POST .../hint` | the brief, and the exhibits the victim handed over (the message, the profile, the payment details) |
+| IntelSearch | `intel`, `intel/domain/{n}`, `intel/ip/{n}` | domain and IP records, hosting, co-hosted domains |
+| DNS History | `dns` | passive DNS both directions, with first/last seen |
+| WHOIS History | `whois` | every registration snapshot, incl. pre-privacy leaks |
+| CertSearch | `certs` | certificate transparency, SAN lists |
+| URL Scanner | `urlscan`, `pivot` | page scans; pivot on tracking ID, favicon, JARM |
+| MalwareDB | `malware` | families, and file analyses by hash / file name |
+| Social Search | `social` | profiles by handle, name or bio; posts and DMs by text (a match returns the author too) |
+| Reverse Image | `reverseimage` | every copy of a photo, oldest first; AI-face score |
+| Phone Lookup | `phone` | carrier, line type, CNAM, spam reports |
+| Spam Texts | `sms` | reported texts by number or wording |
+| Audio Lab | `audio` | transcripts, STIR/SHAKEN, voiceprint match, synthetic-voice score |
+| Document Lab | `documents` | exiftool-style metadata that exposes forgers |
+| Payments | `payments` | accounts, payment handles, gift cards, wallets (1-char prefixes allowed) |
+| Money Trail | `moneytrail` | follows transfers hop by hop (recursive CTE) to the cash-out |
+| ScamWatch | `complaints` | other victims' reports: corroboration and noise |
+| Breach Lookup | `breach` | exact email / username in leaked user tables |
+| Web Search | `websearch` | vendor reports and blogs, plus any campaign they name |
+| Directory | `directory` | actor aliases across vendors, and people |
+| Evidence Map | `cases/{n}/graph` | pinned evidence and its neighbours |
+| Case Report | `cases/{n}/report-options`, `cases/{n}/submit` | one field per answer slot the scenario declares |
+| (any) | `card/{n}` | one record, for links between tools |
+| (all) | `GET/POST/DELETE cases/{n}/evidence` | the evidence board |
 
-The compat layer serves the **7-app client**, which covers the phishing
-scenarios end to end (bulk, spear, whaling, clone, angler, smishing, vishing
-all map onto domain → IP → malware → campaign → actor). The non-phishing scams
-(romance, advance-fee, tech-support, pig-butchering) need the extra apps
-(Reverse Image, Audio Lab, Phone, Money Trail) and are reached through the
-native, un-prefixed `/cases` API documented above — that's the next batch of
-client work.
+**You can only name what you found.** Every record a tool shows is written to
+`case_discoveries`. The Case Report offers, for each field, only entities of that
+kind the player has surfaced, and pinning requires discovery too. That table is
+also research data (`v_discovery_timeline`: when each player first saw each part
+of the answer and each decoy).
 
-Integer IDs map to UUIDs through two tiny tables (`compat_case_ids`,
-`compat_entity_ids`) created automatically. Every search still writes to
-`query_log`, so the research data is collected the same whichever client calls.
+**Every scenario is proven solvable through the client.** `make test` includes a
+bot that starts from the exhibits and may only follow what the client's screens
+offer (card rows, record buttons, and names it reads in text). It must surface
+every answer slot, pin the chain, and get a correct grade, for all 11 scenarios
+at easy and hard (hard includes unmasking the real person).
 
-## Plugging in the frontend
+Every search still writes to `query_log`, so the research data is the same
+whichever client is used.
+
+## The terminal smoke client (backend/client)
+
+`backend/client/` holds a separate C++ `ApiClient` for the native, UUID API
+(un-prefixed routes) and the terminal tool `make smoke` builds from it.
+
+### Using ApiClient in another frontend
 
 Copy your UI sources into `client/src/` next to `net/`. The Makefile compiles
 every `.cpp` under `client/src`. If you keep your own Makefile instead, add:
