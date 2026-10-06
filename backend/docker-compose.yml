@@ -1,0 +1,26 @@
+# One-command local database for teammates / the professor:
+#   docker compose up -d        # starts Postgres on localhost:5432
+#   then set DATABASE_URL and run the normal make targets:
+#   export DATABASE_URL=postgresql://cas:cas@localhost:5432/osint
+#   make db-migrate && make db-seed && make server
+#
+# This is ONLY the database. The FastAPI server and the game run on the host
+# (make server / the client), so you can rebuild them without touching the DB.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cas
+      POSTGRES_PASSWORD: cas
+      POSTGRES_DB: osint
+    ports:
+      - "5432:5432"
+    volumes:
+      - cas_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cas -d osint"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  cas_pgdata:
