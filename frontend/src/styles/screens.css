@@ -1,0 +1,274 @@
+/* Full screens outside the desktop: title, consent, surveys, boot, thanks. */
+.screen {
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  background: radial-gradient(ellipse at 70% 35%, #163049 0%, var(--desktop-top) 40%, var(--desktop-bottom) 100%);
+  color: var(--text-invert);
+}
+
+/* radar rings, shared with the desktop wallpaper */
+.radar {
+  position: absolute;
+  width: 1100px;
+  height: 1100px;
+  left: 72%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle, transparent 0 77px, rgba(70, 130, 175, 0.09) 77px 78px),
+    conic-gradient(from 0deg, rgba(63, 182, 232, 0.14), transparent 18%, transparent);
+  pointer-events: none;
+}
+.radar-title {
+  left: 50%;
+  top: 46%;
+  animation: sweep 9s linear infinite;
+}
+@keyframes sweep {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radar-title {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------ title */
+.title-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+.title-card {
+  position: relative;
+  max-width: 640px;
+  text-align: center;
+}
+.title-logo {
+  margin-bottom: 6px;
+}
+.game-title {
+  font-size: clamp(38px, 7vw, 64px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #eaf3fb;
+  text-shadow: 0 0 30px rgba(63, 182, 232, 0.35);
+}
+.game-tagline {
+  margin: -4px 0 18px;
+  font-size: 15px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #8fb6d4;
+}
+.title-pitch {
+  max-width: 520px;
+  margin: 0 auto 26px;
+  font-size: 15.5px;
+  color: #c7d6e4;
+}
+.title-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.btn-hero {
+  min-height: 46px;
+  padding: 8px 30px;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+}
+.study-opt {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 14px 16px;
+  border: 1px solid rgba(143, 182, 212, 0.35);
+  border-radius: 6px;
+  background: rgba(10, 24, 36, 0.6);
+  text-align: left;
+  font-size: 13.5px;
+  color: #c7d6e4;
+  cursor: pointer;
+}
+.study-opt input {
+  margin-top: 3px;
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+.study-opt.joined {
+  cursor: default;
+  border-color: rgba(31, 138, 86, 0.6);
+}
+.title-foot {
+  position: relative;
+  max-width: 640px;
+  margin-top: 34px;
+  font-size: 12px;
+  text-align: center;
+  color: #6f8ca5;
+}
+
+/* ------------------------------------------------------------ forms (consent, surveys) */
+.form-screen {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 16px;
+}
+.form-card {
+  width: 100%;
+  max-width: 720px;
+  padding: 28px 30px;
+  border-radius: 8px;
+  background: var(--win-panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.consent-text {
+  margin: 10px 0 18px;
+  padding: 14px 16px;
+  border-left: 4px solid var(--accent);
+  background: #eef3f8;
+  white-space: pre-wrap;
+}
+.form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.form-actions .dim {
+  margin-right: auto;
+}
+.survey-section {
+  margin: 18px 0 0;
+  padding: 6px 16px 14px;
+  border: 1px solid #d6dde6;
+  border-radius: 6px;
+}
+.survey-section legend {
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  color: var(--accent-dark);
+  text-transform: uppercase;
+}
+.q {
+  margin: 14px 0 4px;
+}
+.q-prompt {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.q-optional {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+.choices {
+  display: grid;
+  gap: 2px;
+}
+.likert {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.likert-end {
+  font-size: 12px;
+  color: var(--text-dim);
+  max-width: 120px;
+}
+.likert-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 34px;
+  border: 1px solid var(--field-edge);
+  border-radius: var(--radius);
+  background: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.likert-step input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.likert-step.on {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+.likert-step:focus-within {
+  outline: 2px solid var(--accent-bright);
+}
+.quiz-result {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  margin: 18px 0;
+  text-align: center;
+}
+.quiz-num {
+  font: 800 36px var(--font-mono);
+  color: var(--accent-dark);
+}
+.quiz-arrow {
+  font-size: 28px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ boot */
+.boot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.boot-name {
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: 0.14em;
+  color: #dce8f4;
+}
+.boot-agency {
+  margin: 6px 0 40px;
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  color: #7896b4;
+}
+.boot-bar {
+  width: 300px;
+  height: 6px;
+  background: #20303f;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.boot-fill {
+  height: 100%;
+  background: var(--accent-bright);
+}
+.boot-line {
+  margin-top: 14px;
+  font-size: 12px;
+  color: #6c88a4;
+}

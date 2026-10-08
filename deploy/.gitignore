@@ -1,0 +1,4 @@
+# server secrets and backups
+.env
+*.env
+backups/

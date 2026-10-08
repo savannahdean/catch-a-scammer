@@ -1,0 +1,13 @@
+# Keep the image small and secrets out of it.
+.git
+.vscode
+**/node_modules
+**/__pycache__
+frontend/dist
+backend/.venv
+backend/.env
+backend/exports
+backend/data/*.csv
+deploy/.env
+deploy/backups
+docs

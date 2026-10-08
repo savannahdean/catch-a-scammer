@@ -1,3 +1,24 @@
 {
-    "cmake.sourceDirectory": "C:/Users/haley/OneDrive/Documents/GitHub/catch-a-scammer/client/src"
+    // The Python interpreter the server runs in (created by the "Setup" task).
+    // On macOS/Linux change Scripts\\python.exe to bin/python.
+    "python.defaultInterpreterPath": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe",
+    "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
+    // Run tasks in cmd.exe: an MSYS2/Git Bash login shell drops the Windows PATH, so it can't find npm.
+    "terminal.integrated.automationProfile.windows": { "path": "cmd.exe" },
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/node_modules": true
+    },
+    // Browse the game database from the SQLTools sidebar (the Docker Postgres).
+    "sqltools.connections": [
+        {
+            "name": "catch-a-scammer (Docker)",
+            "driver": "PostgreSQL",
+            "server": "localhost",
+            "port": 5432,
+            "database": "osint",
+            "username": "cas",
+            "password": "cas"
+        }
+    ]
 }
