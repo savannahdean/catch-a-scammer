@@ -17,7 +17,7 @@ On every start, the game applies new database migrations. On the very first star
 
 - [ ] **Push your work to GitHub.** Render builds whatever is on the branch you choose.
 - [ ] **Make sure Render can see the repo.** Render connects to *your* GitHub account. If the repo belongs to a teammate (`savannahdean/catch-a-scammer`), either they connect Render to it, or they make you an admin of the repo, or you fork it to your own account and deploy the fork.
-- [ ] **Leave the study off for now** (`STUDY_ENABLED=off`, the default in `render.yaml`) until you know whether you need ethics approval. See [STUDY_DATA.md](STUDY_DATA.md).
+- [ ] **The study is on** (`STUDY_ENABLED=on` in `render.yaml`). Players only take part if they tick the box on the title screen and agree to the consent screen. Upgrade the database before collecting real data (see below). See [STUDY_DATA.md](STUDY_DATA.md).
 
 ## 1. Create the Blueprint
 

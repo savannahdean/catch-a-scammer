@@ -22,9 +22,9 @@ services:
         value: "5"
       - key: WORLD_SEED
         value: "1337"
-      # the research study: leave off until you have approval (docs/STUDY_DATA.md)
+      # the research study: opt-in only, offered on the title screen (docs/STUDY_DATA.md)
       - key: STUDY_ENABLED
-        value: "off"
+        value: "on"
       # the old UUID API skips case keys, and the API docs aren't for players
       - key: LEGACY_API
         value: "off"
