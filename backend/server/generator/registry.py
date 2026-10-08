@@ -9,7 +9,7 @@ from uuid import UUID
 import psycopg
 
 from .base import Profile, Scenario
-from .scenarios import phishing, social
+from .scenarios import extortion, phishing, social
 
 SCENARIOS: dict[str, type[Scenario]] = {
     cls.key: cls
@@ -17,6 +17,7 @@ SCENARIOS: dict[str, type[Scenario]] = {
         phishing.CredentialPhish, phishing.SpearPhish, phishing.Whaling, phishing.ClonePhish,
         phishing.AnglerPhish, phishing.Smishing, phishing.Vishing,
         social.Romance, social.AdvanceFee, social.TechSupport, social.PigButchering,
+        extortion.AdultAd,
     )
 }
 

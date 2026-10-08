@@ -83,6 +83,24 @@ class CredentialPhish(Scenario):
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
 
+        fam_id = self.conn.execute("select dst_id from entity_relationships where src_id=%s and rel='sample_of'",
+                                   (sample,)).fetchone()[0]
+        file_name = self.conn.execute("select file_name from malware_samples where entity_id=%s", (sample,)).fetchone()[0]
+        self.fact("story", ["story"], f"I got an email that looked like it came from {self.brand}, saying someone had tried to "
+                  f"sign in to my account. I clicked 'Verify now' and logged in. The next day someone had been in my account.")
+        self.fact("when", ["when"], f"The email arrived {self.said(self.when_of(email))}. I clicked it a few minutes later.")
+        self.fact("contact", ["contact"], f"It was an email from '{self.brand} Security'. I handed it over, it's in the exhibits.")
+        self.fact("link", ["link"], f"The button said 'Verify now'. The page looked exactly like the {self.brand} sign-in page.",
+                  keywords=["button", "verify"])
+        self.fact("login", ["login"], "I typed my email and password. Then it said my session had expired and sent me to the "
+                  "real site, so I thought everything was fine.")
+        self.fact("download", ["device"], f"After I logged in it said my statement was ready and a zip file downloaded. I opened "
+                  f"the file inside it, {file_name}. Nothing seemed to happen, so I forgot about it.",
+                  secret=True, lie="No, I didn't download anything. I only logged in.",
+                  keywords=["download", "downloaded", "file", "zip", "statement", "open", "opened", "install", "exe",
+                            "attachment", "run", "ran"],
+                  unlocks=[pay_url], proof=[pay_url, sample, fam_id])
+
         briefing = (f"{self.victim} ({self.victim_role}, Midstate University) reports their {self.brand} account was "
                     f"accessed after they clicked a link in an email that looked like it came from {self.brand} on "
                     f"{self.local(self.at())}. Identify the malicious infrastructure and who is behind it.")
@@ -156,6 +174,19 @@ class SpearPhish(Scenario):
         self.chain(self.actor_id, "Threat actor")
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
+
+        self.fact("story", ["story"], f"I got an email from someone who said we'd met at {conf}. They had shared notes and "
+                  f"photos from our session, so I signed in with my {self.brand} account to open them.")
+        self.fact("when", ["when"], f"It arrived {self.said(self.when_of(email))}.")
+        self.fact("contact", ["contact", "who"], f"It was signed '{sender}'. I assumed it was someone from the event.")
+        self.fact("link", ["link"], "It was an 'Open document' link. The sign-in page looked normal.")
+        self.fact("login", ["login"], f"I entered my {self.brand} username and password. The document never loaded.")
+        self.fact("posted", ["who"], f"I did post about {conf} on Linkline, publicly. I thought my profile was private. That "
+                  f"must be how they knew I was there.", secret=True,
+                  lie="I never post about work online, and my profiles are private. Nobody could have known I was there.",
+                  keywords=["post", "posted", "posting", "social", "linkline", "profile", "public", "online", "share",
+                            "shared", "conference", "event", "mention", "mentioned", "media", "know", "knew"],
+                  unlocks=[vp, detail_post], proof=[detail_post, vp])
 
         briefing = (f"{self.victim} ({self.victim_role}) received an email referencing {conf}, which they had posted "
                     f"about publicly, and entered their {self.brand} credentials on the linked page. Find the "
@@ -249,6 +280,21 @@ class Whaling(Scenario):
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
 
+        prov, ident = self.payment_details(mule)
+        self.fact("story", ["story"], f"I got an urgent email from {exec_name}, our {exec_title}, asking me to process a "
+                  f"confidential wire to a new vendor before the end of the day.")
+        self.fact("when", ["when"], f"The first email came in {self.said(self.when_of(email))}.")
+        self.fact("contact", ["contact"], f"It was an email from {exec_name}'s address. At a glance the domain looked like ours.")
+        self.fact("who", ["who"], f"{exec_name} really is our {exec_title}. Their name and title are on the university's staff "
+                  f"page and on Linkline.")
+        self.fact("sent_wire", ["money", "amount"], f"I replied, and they sent the banking details: {prov}, account {ident}. "
+                  f"I sent the $48,500 before anyone stopped me. They said to keep it confidential, so I didn't tell my "
+                  f"manager until afterwards.", secret=True,
+                  lie="I didn't send anything. I got suspicious and stopped before paying.",
+                  keywords=["wire", "wired", "sent", "send", "transfer", "bank", "account", "details", "reply", "replied",
+                            "paid", "pay", "money"],
+                  unlocks=[follow, mule], proof=[mule, exch, ldom])
+
         briefing = (f"{self.victim} ({self.victim_role}) nearly wired $48,500 after receiving an urgent, confidential "
                     f"request appearing to come from {exec_name}, {exec_title}. The email domain looked almost right. "
                     f"Identify the fake domain, trace the account, and name the actor.")
@@ -308,6 +354,18 @@ class ClonePhish(Scenario):
         self.chain(self.actor_id, "Threat actor")
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
+
+        self.fact("story", ["story"], f"I got an email from {self.brand} 'resending' my statement in case the first one went to "
+                  f"spam. I signed in on a page that looked exactly like {self.brand}'s.")
+        self.fact("when", ["when"], f"It came in {self.said(self.when_of(email))}.")
+        self.fact("contact", ["contact"], f"An email from '{self.brand} Customer Care'.")
+        self.fact("link", ["link"], f"The link opened a page identical to the real {self.brand} login. Same logo, same everything.")
+        self.fact("passwords", ["login"], "When it said my password was wrong, I tried my other passwords too: my bank one and my "
+                  "university one. It kept saying wrong, so I gave up.", secret=True,
+                  lie="I typed my password once. That's it.",
+                  keywords=["passwords", "tried", "again", "wrong", "other", "retry", "bank", "reuse", "same", "times",
+                            "different"],
+                  proof=[s.landing_scan, s.primary_id, s.landing_id])
 
         briefing = (f"{self.victim} ({self.victim_role}) received a 'resent' {self.brand} email and signed in on a page "
                     f"that looked exactly like the real one. Prove it was a clone, find where it was hosted, and name the actor.")
@@ -374,6 +432,20 @@ class AnglerPhish(Scenario):
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
 
+        self.fact("story", ["story"], f"I complained to @{brand_handle} on Chirper about being locked out of my account. A "
+                  f"support account replied quickly with a recovery link, so I used it.")
+        self.fact("when", ["when"], f"I posted my complaint {self.said(self.when_of(complaint))} and the reply came "
+                  f"{self.said(self.when_of(reply))}.")
+        self.fact("contact", ["contact", "who"], f"The reply came from @{imp_handle}. It said it was {self.brand} Support.")
+        self.fact("link", ["link"], "The link went to an account-recovery page that looked official.")
+        self.fact("login", ["login"], f"I entered my {self.brand} email and password on it.")
+        self.fact("code", ["login", "phone"], "They also messaged me privately asking for the 6-digit code that got texted to "
+                  "me, to 'confirm it was me'. I sent it.", secret=True,
+                  lie="I didn't share anything else with them. Just the login page.",
+                  keywords=["code", "dm", "message", "messaged", "texted", "text", "verify", "verification", "digit",
+                            "2fa", "mfa", "private", "privately"],
+                  proof=[imp, reply, s.primary_id])
+
         briefing = (f"{self.victim} publicly complained to {self.brand} on social media and got a quick reply from what "
                     f"looked like {self.brand} support, with a recovery link. Identify the impostor account, the "
                     f"phishing site, and the actor.")
@@ -436,6 +508,18 @@ class Smishing(Scenario):
         self.chain(self.actor_id, "Threat actor")
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
+
+        self.fact("story", ["story"], "I got texts saying my campus email storage was almost full and would be locked. I tapped "
+                  "the link and logged in.")
+        self.fact("when", ["when"], f"The first text came {self.said(self.when_of(sms1))}, then a reminder a bit later.")
+        self.fact("contact", ["contact", "phone"], f"They were texts from {self.pretty(number)}. I didn't recognize the number "
+                  f"but it said MSU IT.")
+        self.fact("link", ["link"], f"It was a short link, {shortlink}. It opened a login page.")
+        self.fact("login", ["login"], f"I logged in with my {self.brand} account.")
+        self.fact("card", ["money"], "After I logged in it said there was a $1.99 storage-upgrade fee, so I entered my debit "
+                  "card.", secret=True, lie="I only entered my login. Nothing else.",
+                  keywords=["card", "debit", "credit", "fee", "pay", "paid", "upgrade", "charge", "charged", "bank"],
+                  proof=[s.landing_id, s.landing_scan, s.primary_id])
 
         briefing = (f"{self.victim} ({self.victim_role}) got texts in casual campus-texting style about their mailbox "
                     f"and {self.brand} account, with a shortened link, and entered their login. Identify the sending "
@@ -520,6 +604,20 @@ class Vishing(Scenario):
         self.chain(self.actor_id, "Threat actor")
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
+
+        prov, ident = self.payment_details(mule)
+        self.fact("story", ["story"], f"I got a voicemail from {exec_name}, our {exec_title}. They were going into a board "
+                  f"meeting, needed an urgent vendor payment, and said to call our finance line. It really sounded like them.")
+        self.fact("when", ["when"], f"The voicemail came in {self.said(self.when_of(vm))}.")
+        self.fact("number", ["phone"], f"The voicemail said to call {self.pretty(number)}. My phone showed the caller as "
+                  f"{exec_name} (mobile).")
+        self.fact("voice", ["who"], f"I've heard {exec_name} speak at convocation. It was their voice, I'm sure of it.",
+                  keywords=["voice", "sounded", "sound", "real"])
+        self.fact("called", ["phone", "money", "amount"], f"I did call the number. A man said he was from finance and gave me "
+                  f"an account at {prov}, {ident}. I started the transfer before I got nervous.", secret=True,
+                  lie="I never called the number back. I just reported the voicemail.",
+                  keywords=["call", "called", "back", "account", "transfer", "wire", "paid", "pay", "sent", "spoke", "talked"],
+                  unlocks=[mule], proof=[callback, mule, wallet])
 
         briefing = (f"{self.victim} ({self.victim_role}) received a voicemail that sounded like {exec_name}, {exec_title}, "
                     f"urgently requesting a vendor wire and giving a finance call-back line. Prove the voice was cloned, "

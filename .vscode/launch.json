@@ -1,0 +1,47 @@
+{
+  // Run and Debug panel (Ctrl+Shift+D). Breakpoints work in backend/*.py and frontend/src/*.tsx.
+  // Stop the "API: run server" task first if it is running: only one process can use port 8000.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API: debug the FastAPI server",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["server.app:app", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "justMyCode": true
+    },
+    {
+      "name": "Client: open the game in Edge",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "Client: run dev server"
+    },
+    {
+      "name": "Client: open the game in Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "Client: run dev server"
+    },
+    {
+      "name": "Test: debug the playtest",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/scripts/playtest.py",
+      "args": ["1"],
+      "cwd": "${workspaceFolder}/backend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full game: debug API + open client in Edge",
+      "configurations": ["API: debug the FastAPI server", "Client: open the game in Edge"],
+      "stopAll": true
+    }
+  ]
+}

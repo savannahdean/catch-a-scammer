@@ -8,6 +8,8 @@ lure, the social accounts, the voicemail, the money trail ...) and reuses:
   attribution()   campaign + actor + vendor report + decoy blogs + false flag
   unmask()        registrant/account email -> breach -> forum -> social -> person
   complaints()    other victims' reports: corroboration AND noise
+  fact()          what the reporting party knows, and what they may hide
+                  (read by the Messenger, server/messenger.py)
   email_msg(), sms(), audio(), persona(), post(), image(), document(),
   phone(), payment(), wallet(), lure()     artifact builders
 """
@@ -45,6 +47,7 @@ class Profile:
     require_person: bool
     max_hints: int
     base_score: int
+    client_can_fire: bool = True      # the client's mood meter can end the case
 
 
 @dataclass
@@ -85,6 +88,7 @@ class Scenario:
         self.used_values: set[str] = set()
         self.slots: dict[str, UUID] = {}
         self.hints: list[str] = []
+        self.facts: list[dict] = []
         self.operator: dict | None = None
 
     # =================================================================== run
@@ -150,6 +154,24 @@ class Scenario:
         self.w.role(eid, "supporting", why=why)
         return eid
 
+    def fact(self, key: str, topics: list[str], body: str, *, secret: bool = False, lie: str | None = None,
+             volunteer: bool | None = None, unlocks=(), proof=(), keywords=()) -> None:
+        """Something the reporting party knows, in their own words (first person).
+
+        topics    the Messenger intents that ask about it (story, when, contact, link,
+                  login, money, amount, device, who, phone) -- see server/messenger.py
+        keywords  extra words that point straight at it ("zip", "gift cards")
+        secret    the embarrassing part: harder clients hide it until asked well or shown proof
+        lie       what a lying client says instead, until shown proof
+        volunteer upfront clients tell it in their first message (default: not secret)
+        unlocks   records the client hands over once they tell it (withheld from the exhibits)
+        proof     records that make a lying client admit it, when the player shows one
+        """
+        self.facts.append(dict(key=key, topics=list(topics), body=body, secret=secret, lie=lie,
+                               volunteer=(not secret) if volunteer is None else volunteer,
+                               unlocks=[u for u in unlocks if u], proof=[p for p in proof if p],
+                               keywords=[k.lower() for k in keywords]))
+
     def herring(self, eid: UUID, why: str, flag: bool = False) -> UUID:
         self.w.role(eid, "false_flag" if flag else "red_herring", why=why)
         return eid
@@ -175,6 +197,24 @@ class Scenario:
 
     def local(self, dt: datetime) -> str:
         return dt.astimezone(VICTIM_TZ).strftime("%B %d at %I:%M %p")
+
+    def said(self, dt: datetime) -> str:
+        """How the client says a time: 'on August 29 at 3:55 PM'."""
+        d = dt.astimezone(VICTIM_TZ)
+        return f"on {d:%B} {d.day} at {d.hour % 12 or 12}:{d:%M} {d:%p}"
+
+    def when_of(self, eid: UUID) -> datetime:
+        """When a message, post, recording or scan happened (for what the client remembers)."""
+        for sql in ("select sent_at from email_messages where entity_id=%s", "select sent_at from sms_messages where entity_id=%s",
+                    "select posted_at from social_posts where entity_id=%s",
+                    "select recorded_at from audio_recordings where entity_id=%s"):
+            row = self.conn.execute(sql, (eid,)).fetchone()
+            if row:
+                return row[0]
+        return self.incident
+
+    def payment_details(self, eid: UUID) -> tuple[str, str]:
+        return self.conn.execute("select provider, identifier from payment_accounts where entity_id=%s", (eid,)).fetchone()
 
     def unique(self, base: str) -> str:
         v = base
@@ -887,3 +927,15 @@ class Scenario:
         conn.execute("update cases set briefing=%s where id=%s", (briefing + objective, self.case_id))
         conn.execute("""insert into case_entities(case_id, entity_id, role) select %s, id, 'noise' from entities
                         where case_id=%s on conflict do nothing""", (self.case_id, self.case_id))
+        self._write_facts(briefing)
+
+    def _write_facts(self, briefing: str) -> None:
+        """What the client can tell the Messenger. Every scenario gets a story fact."""
+        if not any(f["key"] == "story" for f in self.facts):
+            self.fact("story", ["story"], briefing.split(". ")[0].replace(f"{self.victim} ", "I ", 1) + ".")
+        for i, f in enumerate(self.facts):
+            self.conn.execute(
+                """insert into case_client_facts(case_id, key, ord, topics, keywords, body, secret, lie, volunteer,
+                   unlocks, proof) values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (self.case_id, f["key"], i, f["topics"], f["keywords"], f["body"], f["secret"], f["lie"],
+                 f["volunteer"], f["unlocks"], f["proof"]))

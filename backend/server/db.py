@@ -11,6 +11,9 @@ from contextlib import contextmanager
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from .env import load_env
+
+load_env()          # backend/.env -> DATABASE_URL, unless it is already set
 _pool: ConnectionPool | None = None
 
 

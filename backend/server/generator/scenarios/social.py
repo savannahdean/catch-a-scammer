@@ -117,6 +117,25 @@ class Romance(Scenario):
         if self.p.require_person:
             self.unmask([])
 
+        site = plat.split(" (")[0]
+        paid_how = {"gift_card": f"I bought GiftRun gift cards and sent them photos of the codes ({ident})",
+                    "p2p_app": f"I sent it on QuickPay to {ident}",
+                    "money_transfer": f"I sent it with WireMoov, {ident}",
+                    "crypto_exchange": f"I sent it to their Coinvale Exchange account, {ident}"}[method]
+        self.fact("story", ["story"], f"I met {claimed_name} on {site} and we've talked every day for weeks. They're a "
+                  f"{claimed_job}, {claimed_loc}. Now they need help paying a release fee so they can come home.")
+        self.fact("when", ["when"], f"We started talking {self.said(self.when_of(dm1))}. They asked for money "
+                  f"{self.said(self.when_of(dm2))}.")
+        self.fact("who", ["who", "contact"], f"Their name is {claimed_name}, @{handle} on {site}. Their photos are... very "
+                  f"attractive.", keywords=["photo", "photos", "picture", "pictures", "profile", "handle", "name"])
+        self.fact("never_met", ["who"], "We've never video-called. Their camera is always broken or the connection is too bad.",
+                  keywords=["video", "facetime", "meet", "met", "camera", "person", "in person"])
+        self.fact("paid", ["money", "amount"], f"I already sent money. {paid_how}. I didn't want to admit it because I knew "
+                  f"how it would look.", secret=True, lie="I haven't sent them a cent. I'm not stupid.",
+                  keywords=["sent", "send", "paid", "pay", "money", "gift", "card", "cards", "already", "transfer", "fee",
+                            "cash", "how much"],
+                  unlocks=[pay], proof=[pay, wallet])
+
         briefing = (f"{self.victim} ({self.victim_role}) has been in an online relationship for weeks with someone they "
                     f"never met, who now needs money for an overseas 'release fee'. Verify the person is real, identify "
                     f"the persona and photos, trace the money, and name the ring.")
@@ -195,8 +214,9 @@ class AdvanceFee(Scenario):
         wallet = self.wallet("tron")
         self.w.edge(pay, wallet, "transfers_to", start=self.at(1), source="ScamWatch Portal", confidence=3)
         self.support(wallet, "Cash-out wallet")
+        prov, ident = self.payment_details(pay)
         self.complaints([sender, pay], [f"Email said I inherited {amount}, just needed to pay a fee first.",
-                        "Lottery I never entered, asked for a 'release fee' by wire."], indicators=[sender_addr],
+                        "Lottery I never entered, asked for a 'release fee' by wire."], indicators=[sender_addr, ident],
                         loss=(400, 6000))
 
         self.hints = ["Open the attached certificate's metadata. Who is the author, and what tool made it?",
@@ -213,6 +233,20 @@ class AdvanceFee(Scenario):
         self.chain(self.actor_id, "Threat actor behind it")
         if self.p.require_person:
             self.unmask([doc])   # document author -> operator identity path handled in unmask via breach/social
+
+        self.fact("story", ["story"], f"I got an email from {sender_name}, a {role.lower()}, saying I'm the beneficiary of "
+                  f"{amount}. There's an official certificate attached. I just have to pay a processing fee to release it.")
+        self.fact("when", ["when"], f"It came {self.said(self.when_of(email))}.")
+        self.fact("contact", ["contact", "who"], f"The email is from {sender_addr}. When I reply, it goes to a different "
+                  f"address, {reply_addr}.", keywords=["reply", "address", "sender"])
+        self.fact("document", ["device"], "The certificate is a PDF with stamps and signatures. It looks very official.",
+                  keywords=["certificate", "pdf", "document", "attachment", "attached", "stamp"])
+        self.fact("paid", ["money", "amount"], f"I already paid the first ${fee:,} fee through {prov}, {ident}. Now they want "
+                  f"another fee for 'taxes' before they release the money.", secret=True,
+                  lie="I haven't paid anything yet. I wanted to check with you first.",
+                  keywords=["fee", "fees", "paid", "pay", "sent", "wire", "transfer", "processing", "money", "already",
+                            "how much"],
+                  unlocks=[pay], proof=[pay, wallet])
 
         briefing = (f"{self.victim} ({self.victim_role}) received an email promising {amount} after a small processing "
                     f"fee, with an official-looking certificate attached. Expose the forgery, trace the fees, and name "
@@ -304,6 +338,26 @@ class TechSupport(Scenario):
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
 
+        _, cards = self.payment_details(pay)
+        self.fact("story", ["story"], f"A full-screen warning popped up saying my computer was infected and to call "
+                  f"{fake_brand} support. I called, a technician connected to my computer and 'fixed' it, and I paid with "
+                  f"gift cards.")
+        self.fact("when", ["when"], f"It happened {self.said(self.at())}.")
+        self.fact("number", ["phone", "contact"], f"The warning said to call {self.pretty(number)}. That's the number I called.")
+        self.fact("link", ["link"], "I was just browsing and a page took over the whole screen. It played a loud alarm and I "
+                  "couldn't close it.", keywords=["popup", "pop-up", "warning", "screen", "browser", "website", "alarm"])
+        self.fact("device", ["device"], "The technician had me install a remote-support program and read him a code. Then he "
+                  "moved my mouse around by himself.", keywords=["remote", "install", "program", "software", "access",
+                                                                 "connect", "connected", "control"])
+        self.fact("cards", ["money", "amount"], f"He told me to buy GiftRun cards and read him the numbers: {cards}.",
+                  keywords=["gift", "card", "cards", "codes"])
+        self.fact("bank", ["login", "money"], "While he was connected he asked me to log in to my online banking 'to check for "
+                  "hackers', and I did. The next day they called back and I bought more cards.", secret=True,
+                  lie="He only looked at the virus stuff. I never opened my bank account in front of him.",
+                  keywords=["bank", "banking", "login", "logged", "online", "again", "more", "call back", "called back",
+                            "next day", "password"],
+                  proof=[callback, s.primary_id, s.landing_scan])
+
         briefing = (f"{self.victim} ({self.victim_role}) hit a full-screen 'virus' warning, called the number on it, let "
                     f"a 'technician' connect remotely, and paid with gift cards. Identify the warning domain, the number, "
                     f"the payment trail, and the actor.")
@@ -394,6 +448,25 @@ class PigButchering(Scenario):
         self.chain(self.actor_id, "Threat actor behind it")
         if self.p.require_person:
             self.unmask(getattr(self, 'leak_anchor', []))
+
+        dep_addr, dep_total = self.conn.execute("select address, total_received from crypto_wallets where entity_id=%s",
+                                                (deposit,)).fetchone()
+        self.fact("story", ["story"], f"{cname} messaged me out of the blue on {plat.split(' (')[0]}. We became friends and "
+                  f"they showed me how they invest on TrustPeak Pro. My balance went way up, but now it won't let me "
+                  f"withdraw unless I pay a 'tax'.")
+        self.fact("when", ["when"], f"They first messaged me {self.said(self.when_of(dm1))}. They brought up TrustPeak "
+                  f"{self.said(self.when_of(dm2))}.")
+        self.fact("who", ["who", "contact"], f"Their name is {cname}, @{handle}. Very successful, always traveling.",
+                  keywords=["photo", "profile", "name", "handle"])
+        self.fact("link", ["link"], "The platform is TrustPeak Pro. They sent me the link in a message. The dashboard looks "
+                  "like a real exchange.", keywords=["site", "website", "platform", "app", "dashboard", "trustpeak", "withdraw"])
+        self.fact("deposits", ["money", "amount"], f"I've deposited about ${float(dep_total):,.0f} in total, not the few "
+                  f"hundred I said. Some of it I borrowed from my retirement account. They gave me this deposit address: "
+                  f"{dep_addr}.", secret=True,
+                  lie="I only put in a little, a few hundred dollars. It's not a big deal.",
+                  keywords=["deposit", "deposited", "invest", "invested", "total", "borrow", "borrowed", "retirement",
+                            "savings", "401k", "how much", "address", "wallet"],
+                  unlocks=[deposit], proof=[s.primary_id, s.landing_id, s.landing_scan])
 
         briefing = (f"{self.victim} ({self.victim_role}) was befriended online and steered into 'TrustPeak Pro', deposited "
                     f"crypto, saw it grow, then couldn't withdraw. Identify the persona, the fake platform, follow the "

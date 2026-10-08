@@ -1,9 +1,19 @@
-"""Catch-a-Scammer API.  Run: make server   (uvicorn on :8000)
+"""Catch-a-Scammer API.  Run: uvicorn server.app:app --port 8000   (or: make server)
 
-The C++/raylib client only ever talks to this API. The database connection
-string and the ground-truth tables never leave the server.
+Two dialects of the same game live here:
 
-App (in-game window)   -> endpoint
+  /api/...   what the React client (frontend/) uses: integer ids, server-described
+             cards, the Messenger (server/messenger.py) and the research study
+             (server/study.py). Routes are in server/compat.py.
+  /cases/... the original UUID API below, for anyone poking at the data
+             directly. It skips case keys (server/guard.py), so a public
+             server hides it with LEGACY_API=off.
+
+When the client has been built (cd frontend && npm run build), this server also
+serves it at http://127.0.0.1:8000/, so a demo needs only one process.
+The database connection string and the ground-truth tables never leave the server.
+
+UUID API (in-game window -> endpoint)
   CaseDesk             -> POST /cases, GET /cases/{id}, GET /cases/{id}/email
   IntelSearch          -> GET /cases/{id}/search, /entity/{eid}
   DNS History          -> GET /cases/{id}/pdns
@@ -21,19 +31,29 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row, tuple_row
 from pydantic import BaseModel
 
-from . import compat, scoring
+from . import compat, guard, messenger, scoring, study
 from .db import tx
 from .generator.registry import generate_case, sync_catalog, SCENARIOS
 
-app = FastAPI(title="Catch-a-Scammer API", version="1.0")
+app = FastAPI(title="Catch-a-Scammer API", version="2.0",
+              docs_url="/docs" if guard.API_DOCS else None, redoc_url=None,
+              openapi_url="/openapi.json" if guard.API_DOCS else None)
+app.middleware("http")(guard.remember_case_key)
 app.include_router(compat.router)
+app.include_router(messenger.router)
+app.include_router(study.router)
+
+CLIENT_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 @app.on_event("startup")
@@ -104,6 +124,10 @@ def visible(conn, cid: UUID, eid: UUID) -> dict:
 
 
 # ------------------------------------------------------------------ CaseDesk
+# The original UUID routes, mounted near the end of this file only when LEGACY_API is on.
+legacy = APIRouter()
+
+
 class NewCase(BaseModel):
     difficulty: str = "medium"
     seed: Optional[int] = None
@@ -124,7 +148,7 @@ def health():
     return {"ok": True, "world_entities": n}
 
 
-@app.post("/cases")
+@legacy.post("/cases")
 def new_case(body: NewCase):
     with tx() as conn:
         conn.row_factory = tuple_row          # generator uses tuple rows
@@ -144,7 +168,7 @@ def new_case(body: NewCase):
             "report_fields": fields, "max_hints": mh["max_hints"]}
 
 
-@app.get("/cases")
+@legacy.get("/cases")
 def list_cases(limit: int = 20):
     with tx() as conn:
         rows = conn.execute("""select id, case_code, difficulty, status, score, created_at from cases
@@ -152,7 +176,7 @@ def list_cases(limit: int = 20):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}")
+@legacy.get("/cases/{cid}")
 def case_info(cid: UUID):
     with tx() as conn:
         c = get_case(conn, cid)
@@ -161,7 +185,7 @@ def case_info(cid: UUID):
     return jsonable({k: c[k] for k in keep})
 
 
-@app.get("/cases/{cid}/email")
+@legacy.get("/cases/{cid}/email")
 def case_email(cid: UUID):
     with tx() as conn:
         get_case(conn, cid)
@@ -174,7 +198,7 @@ def case_email(cid: UUID):
 
 
 # ------------------------------------------------------------------ IntelSearch
-@app.get("/cases/{cid}/search")
+@legacy.get("/cases/{cid}/search")
 def search(cid: UUID, q: str = Query(min_length=2), limit: int = 25):
     with tx() as conn:
         get_case(conn, cid)
@@ -183,7 +207,7 @@ def search(cid: UUID, q: str = Query(min_length=2), limit: int = 25):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/entity/{eid}")
+@legacy.get("/cases/{cid}/entity/{eid}")
 def entity(cid: UUID, eid: UUID):
     with tx() as conn:
         e = visible(conn, cid, eid)
@@ -209,7 +233,7 @@ def entity(cid: UUID, eid: UUID):
 
 
 # ------------------------------------------------------------------ infrastructure tools
-@app.get("/cases/{cid}/pdns")
+@legacy.get("/cases/{cid}/pdns")
 def pdns(cid: UUID, q: str):
     with tx() as conn:
         get_case(conn, cid)
@@ -221,7 +245,7 @@ def pdns(cid: UUID, q: str):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/whois")
+@legacy.get("/cases/{cid}/whois")
 def whois(cid: UUID, domain: str):
     with tx() as conn:
         get_case(conn, cid)
@@ -232,7 +256,7 @@ def whois(cid: UUID, domain: str):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/ct")
+@legacy.get("/cases/{cid}/ct")
 def ct(cid: UUID, q: str = Query(min_length=3)):
     with tx() as conn:
         get_case(conn, cid)
@@ -241,7 +265,7 @@ def ct(cid: UUID, q: str = Query(min_length=3)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/urlscan")
+@legacy.get("/cases/{cid}/urlscan")
 def urlscan(cid: UUID, q: str = Query(min_length=3)):
     with tx() as conn:
         get_case(conn, cid)
@@ -253,7 +277,7 @@ def urlscan(cid: UUID, q: str = Query(min_length=3)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/pivot")
+@legacy.get("/cases/{cid}/pivot")
 def pivot(cid: UUID, field: str, value: str):
     with tx() as conn:
         get_case(conn, cid)
@@ -266,7 +290,7 @@ def pivot(cid: UUID, field: str, value: str):
 
 
 # ------------------------------------------------------------------ malware / breach / web / directory
-@app.get("/cases/{cid}/malware")
+@legacy.get("/cases/{cid}/malware")
 def malware(cid: UUID, q: str = Query(min_length=3)):
     with tx() as conn:
         get_case(conn, cid)
@@ -287,7 +311,7 @@ def malware(cid: UUID, q: str = Query(min_length=3)):
     return {"families": [jsonable(r) for r in fams], "samples": [jsonable(r) for r in samples]}
 
 
-@app.get("/cases/{cid}/breach")
+@legacy.get("/cases/{cid}/breach")
 def breach(cid: UUID, q: str = Query(min_length=3)):
     with tx() as conn:
         get_case(conn, cid)
@@ -302,7 +326,7 @@ def breach(cid: UUID, q: str = Query(min_length=3)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/web")
+@legacy.get("/cases/{cid}/web")
 def web(cid: UUID, q: str = Query(min_length=2)):
     with tx() as conn:
         get_case(conn, cid)
@@ -318,7 +342,7 @@ def web(cid: UUID, q: str = Query(min_length=2)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/directory")
+@legacy.get("/cases/{cid}/directory")
 def directory(cid: UUID, q: str = Query(min_length=2)):
     with tx() as conn:
         get_case(conn, cid)
@@ -352,7 +376,7 @@ def directory(cid: UUID, q: str = Query(min_length=2)):
 
 
 # ------------------------------------------------------------------ new-scam tools
-@app.get("/cases/{cid}/reverse_image")
+@legacy.get("/cases/{cid}/reverse_image")
 def reverse_image(cid: UUID, q: str):
     """Reverse image search: every place a photo (or near-duplicate) appears, oldest first."""
     with tx() as conn:
@@ -362,7 +386,7 @@ def reverse_image(cid: UUID, q: str):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/money_trail")
+@legacy.get("/cases/{cid}/money_trail")
 def money_trail(cid: UUID, start: UUID, max_depth: int = 6):
     """Follow payments/transfers forward from an account or wallet."""
     with tx() as conn:
@@ -372,7 +396,7 @@ def money_trail(cid: UUID, start: UUID, max_depth: int = 6):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/social")
+@legacy.get("/cases/{cid}/social")
 def social(cid: UUID, q: str = Query(min_length=2)):
     """Search social posts/DMs by text or author handle."""
     with tx() as conn:
@@ -386,7 +410,7 @@ def social(cid: UUID, q: str = Query(min_length=2)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/phone")
+@legacy.get("/cases/{cid}/phone")
 def phone_lookup(cid: UUID, number: str = Query(min_length=3)):
     """Carrier / line-type / spam-report lookup for a phone number."""
     with tx() as conn:
@@ -398,7 +422,7 @@ def phone_lookup(cid: UUID, number: str = Query(min_length=3)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/sms")
+@legacy.get("/cases/{cid}/sms")
 def sms_lookup(cid: UUID, q: str = Query(min_length=2)):
     with tx() as conn:
         get_case(conn, cid)
@@ -409,7 +433,7 @@ def sms_lookup(cid: UUID, q: str = Query(min_length=2)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/document")
+@legacy.get("/cases/{cid}/document")
 def document_lookup(cid: UUID, q: str = Query(min_length=3)):
     """Document search; the detail view (via /entity) exposes the metadata that exposes forgers."""
     with tx() as conn:
@@ -425,7 +449,7 @@ def document_lookup(cid: UUID, q: str = Query(min_length=3)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/audio")
+@legacy.get("/cases/{cid}/audio")
 def audio_lookup(cid: UUID, q: str = Query(min_length=2)):
     """Audio analysis: transcript search; detail shows voiceprint + synthetic score."""
     with tx() as conn:
@@ -441,7 +465,7 @@ def audio_lookup(cid: UUID, q: str = Query(min_length=2)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/payment")
+@legacy.get("/cases/{cid}/payment")
 def payment_lookup(cid: UUID, q: str = Query(min_length=2)):
     with tx() as conn:
         get_case(conn, cid)
@@ -453,7 +477,7 @@ def payment_lookup(cid: UUID, q: str = Query(min_length=2)):
     return [jsonable(r) for r in rows]
 
 
-@app.get("/cases/{cid}/complaints")
+@legacy.get("/cases/{cid}/complaints")
 def complaints_lookup(cid: UUID, q: str = Query(min_length=2)):
     """Fraud-complaint portal: other victims' reports (corroboration and noise)."""
     with tx() as conn:
@@ -470,7 +494,7 @@ def complaints_lookup(cid: UUID, q: str = Query(min_length=2)):
 
 
 # ------------------------------------------------------------------ Evidence Map
-@app.get("/cases/{cid}/graph/{eid}")
+@legacy.get("/cases/{cid}/graph/{eid}")
 def graph(cid: UUID, eid: UUID):
     with tx() as conn:
         get_case(conn, cid)
@@ -485,7 +509,7 @@ class EvidenceIn(BaseModel):
     note: Optional[str] = None
 
 
-@app.get("/cases/{cid}/evidence")
+@legacy.get("/cases/{cid}/evidence")
 def evidence_list(cid: UUID):
     with tx() as conn:
         rows = conn.execute("""select e.id as entity_id, e.kind, e.value::text, e.label, ev.note, ev.added_at
@@ -494,7 +518,7 @@ def evidence_list(cid: UUID):
     return [jsonable(r) for r in rows]
 
 
-@app.post("/cases/{cid}/evidence")
+@legacy.post("/cases/{cid}/evidence")
 def evidence_add(cid: UUID, body: EvidenceIn):
     with tx() as conn:
         require_open(get_case(conn, cid))
@@ -505,7 +529,7 @@ def evidence_add(cid: UUID, body: EvidenceIn):
     return {"ok": True}
 
 
-@app.delete("/cases/{cid}/evidence/{eid}")
+@legacy.delete("/cases/{cid}/evidence/{eid}")
 def evidence_remove(cid: UUID, eid: UUID):
     with tx() as conn:
         conn.execute("delete from case_evidence where case_id=%s and entity_id=%s", (cid, eid))
@@ -513,7 +537,7 @@ def evidence_remove(cid: UUID, eid: UUID):
 
 
 # ------------------------------------------------------------------ Hints / Report
-@app.post("/cases/{cid}/hint")
+@legacy.post("/cases/{cid}/hint")
 def hint(cid: UUID):
     with tx() as conn:
         c = get_case(conn, cid)
@@ -537,7 +561,7 @@ class Submission(BaseModel):
     evidence: Optional[list[UUID]] = None      # defaults to everything on the evidence board
 
 
-@app.post("/cases/{cid}/submit")
+@legacy.post("/cases/{cid}/submit")
 def submit(cid: UUID, body: Submission):
     with tx() as conn:
         c = get_case(conn, cid)
@@ -560,14 +584,14 @@ def submit(cid: UUID, body: Submission):
     return result
 
 
-@app.post("/cases/{cid}/abandon")
+@legacy.post("/cases/{cid}/abandon")
 def abandon(cid: UUID):
     with tx() as conn:
         conn.execute("update cases set status='abandoned', closed_at=now() where id=%s and status='open'", (cid,))
     return {"ok": True}
 
 
-@app.get("/cases/{cid}/debrief")
+@legacy.get("/cases/{cid}/debrief")
 def debrief(cid: UUID):
     """Only after the case is closed: the full story, and what each clue really was."""
     with tx() as conn:
@@ -580,3 +604,23 @@ def debrief(cid: UUID):
                                 where ce.case_id=%s and ce.role <> 'noise'
                                 order by ce.role, ce.hop nulls last""", (cid,)).fetchall()
     return {"resolution": truth["resolution_text"], "entities": [jsonable(r) for r in roles]}
+
+
+# The UUID API skips case keys, so a public server turns it off (LEGACY_API=off).
+if guard.LEGACY_API:
+    app.include_router(legacy)
+
+
+# ------------------------------------------------------------------ the built React client
+# Registered last so every API route above wins. Only active after `npm run build`.
+if CLIENT_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=CLIENT_DIST / "assets"), name="assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def client_app(path: str):
+        if path.startswith(("api/", "cases", "scenarios", "health")):
+            raise HTTPException(404, "not found")       # a wrong API path stays a JSON 404, not the game page
+        f = CLIENT_DIST / path
+        if path and f.is_file() and CLIENT_DIST in f.resolve().parents:
+            return FileResponse(f)
+        return FileResponse(CLIENT_DIST / "index.html")

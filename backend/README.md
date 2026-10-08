@@ -1,10 +1,13 @@
 # Catch-a-Scammer — realistic OSINT backend (PostgreSQL)
 
 ```
-raylib C++ client  ──HTTP/JSON──▶  FastAPI (server/)  ──SQL──▶  PostgreSQL (Docker)
-  client/src/net/ApiClient            case generator,            schema, search functions,
-  (drop into your UI)                 tools, scoring             recursive chain validation
+React client (../frontend)  ──HTTP/JSON──▶  FastAPI (server/)  ──SQL──▶  PostgreSQL (Docker)
+  SleuthOS desktop, Messenger,                case generator, tools,      schema, search functions,
+  study surveys                               Messenger, study, scoring   recursive chain validation
 ```
+
+Setup and day-to-day running (VS Code tasks, PowerShell) are in the [top-level README](../README.md);
+the answer key for every scenario is in [docs/GAME_WIKI.md](../docs/GAME_WIKI.md).
 
 The client never sees the database password or the answer tables. Every table
 also has row-level security on with no policies, so only the server's own
@@ -17,28 +20,26 @@ docker compose up -d      # local Postgres 16 on :5432 (needs Docker Desktop run
 make setup                # venv, C++ headers, creates .env (already points at the Docker DB)
 make db-migrate           # apply all migrations (tracked, idempotent)
 make db-seed              # the persistent "world" (~1,500 entities)
-make test                 # generates 12 cases, verifies each is solvable, grades answers
+make test                 # every scenario: solvable, graded, played by a bot; Messenger + study checks
 make server               # API on :8000   (leave running)
-make smoke                # terminal game: ./build/api_smoke <difficulty> [scenario]
-make client               # your raylib game
+make web                  # React client on :5173 (in another terminal)
 ```
 
 Without `make` (plain Windows PowerShell), from this `backend/` folder:
 
 ```powershell
 docker compose up -d
-copy .env.example .env
+copy .env.example .env                       # the server and scripts read DATABASE_URL from here
 python -m venv .venv
 .venv\Scripts\python -m pip install -r server\requirements.txt
-$env:DATABASE_URL = "postgresql://cas:cas@localhost:5432/osint"
 .venv\Scripts\python scripts\migrate.py
 .venv\Scripts\python -m server.generator.world
 .venv\Scripts\python -m uvicorn server.app:app --port 8000      # leave running
-# in a second terminal (set DATABASE_URL there too):
-$env:API_URL = "http://127.0.0.1:8000"; .venv\Scripts\python scripts\playtest.py 1
+# in a second terminal:
+.venv\Scripts\python scripts\playtest.py 1
 ```
 
-The `supabase/` folder name is historical; the migrations are plain PostgreSQL.
+The schema is plain PostgreSQL, in `database/migrations/` (applied in filename order by `scripts/migrate.py`).
 
 Put the Kaggle file at `data/osint_public_profiles_dataset.csv` before `make db-seed`
 and the Directory is filled from it (names, usernames, companies only; its IPs and
@@ -46,7 +47,7 @@ domains are ignored on purpose because they could be real).
 
 ## Scam scenarios
 
-The game ships **11 scam types**, picked at case creation (`scenario` in `POST /cases`,
+The game ships **12 scam types**, picked at case creation (`scenario` in `POST /cases`,
 or `"random"`). `GET /scenarios` lists them with the Case Report fields each one needs,
 so the client builds the right answer form per scam. Each is a real technique; the
 "2.0" phishing variants add AI-era tailoring the player can see in the evidence.
@@ -71,24 +72,26 @@ Classic social-engineering scams (different toolset — images, docs, phone, mon
 | `advance_fee`    | Advance-fee ("prince")    | document metadata exposes the forger |
 | `tech_support`   | Tech-support scam         | fake pop-up → call-back number → gift-card payment |
 | `pig_butchering` | Pig-butchering (crypto)   | multi-hop wallet trail from a fake trading platform |
+| `adult_ad`       | Adult-site ad & sextortion | the "I recorded you" threat is a bluff (breach data); the client hides the ad click that gave away their card |
+
+Every scenario also writes what the reporting party knows (`case_client_facts`, via
+`Scenario.fact()`), including one thing they may hide. The client Messenger
+(`server/messenger.py`) serves those facts in the voice of one of nine personalities.
 
 At `hard`/`expert` every scenario also requires unmasking the **real person** behind the
 operation (leaked email → breach corpus → forum persona → social handle → identity), with a
 look-alike handle planted to punish jumping to conclusions.
 
-Adding scam #12 is one class in `server/generator/scenarios/` plus a line in
-`registry.py`; the tools, graph, scoring, and logging all work unchanged.
+Adding scam #13 is one class in `server/generator/scenarios/` plus a line in
+`registry.py`; the tools, graph, scoring, Messenger and logging all work unchanged.
 
-## The desktop client (`/api`, server/compat.py + server/cards.py)
+## The game client (`/api`, server/compat.py + server/cards.py)
 
-The raylib game in the repo's top-level `client/` talks only to the `/api/...`
+The React game in the repo's top-level `frontend/` talks only to the `/api/...`
 routes. It uses **integer** ids (the `seq` identity column every case and
 entity gets on creation, next to its UUID) and is a thin renderer: it holds no game
-data and no answer key. Run it against this server:
-
-```
-./catch-a-scammer --api http://127.0.0.1:8000
-```
+data and no answer key. In development Vite proxies `/api` to this server; after
+`npm run build` this server also serves the built client at `/`.
 
 Every tool answers a search with one envelope:
 `{"query", "found", "message", "cards": [...], ...}`. The original four tools
@@ -122,8 +125,10 @@ client's `apps_lookup.cpp`.
 | Directory | `directory` | actor aliases across vendors, and people |
 | Evidence Map | `cases/{n}/graph` | pinned evidence and its neighbours |
 | Case Report | `cases/{n}/report-options`, `cases/{n}/submit` | one field per answer slot the scenario declares |
+| Messenger | `GET/POST cases/{n}/messenger`, `personalities` | the client: keyword-driven answers, secrets, the mood meter, chasing (server/messenger.py) |
 | (any) | `card/{n}` | one record, for links between tools |
-| (all) | `GET/POST/DELETE cases/{n}/evidence` | the evidence board |
+| (all) | `GET/POST/DELETE cases/{n}/evidence` | the evidence board (pinning a red herring the client recognizes upsets them) |
+| Study | `study/consent`, `study/participants[/{id}[/answers]]`, `study/questions?phase=` | opt-in consent, pre/post surveys, withdrawal (server/study.py) |
 
 **You can only name what you found.** Every record a tool shows is written to
 `case_discoveries`. The Case Report offers, for each field, only entities of that
@@ -133,59 +138,14 @@ of the answer and each decoy).
 
 **Every scenario is proven solvable through the client.** `make test` includes a
 bot that starts from the exhibits and may only follow what the client's screens
-offer (card rows, record buttons, and names it reads in text). It must surface
-every answer slot, pin the chain, and get a correct grade, for all 11 scenarios
-at easy and hard (hard includes unmasking the real person).
+offer (card rows, record buttons, names it reads in text, and records the client
+hands over in the Messenger). It must surface every answer slot, pin the chain,
+and get a correct grade, for all 12 scenarios at easy and hard. On hard the client
+is a **liar**, so the bot has to show them proof, and the case includes unmasking
+the real person. `make test` also checks every client personality and the study.
 
 Every search still writes to `query_log`, so the research data is the same
 whichever client is used.
-
-## The terminal smoke client (backend/client)
-
-`backend/client/` holds a separate C++ `ApiClient` for the native, UUID API
-(un-prefixed routes) and the terminal tool `make smoke` builds from it.
-
-### Using ApiClient in another frontend
-
-Copy your UI sources into `client/src/` next to `net/`. The Makefile compiles
-every `.cpp` under `client/src`. If you keep your own Makefile instead, add:
-
-- `-Iclient/src -Iclient/vendor` to the compile flags
-- `client/src/net/ApiClient.cpp` to the sources
-- `-pthread` (Linux/macOS) or `-lws2_32 -lcrypt32` (Windows) to the link flags
-
-Include only `net/ApiClient.hpp` from UI code. It never includes `httplib.h`,
-which on Windows drags in `<windows.h>` and collides with raylib's
-`CloseWindow`, `DrawText`, and `Rectangle`.
-
-| In-game app      | ApiClient call                                  |
-|------------------|-------------------------------------------------|
-| CaseDesk         | `newCase`, `caseInfo`, `email`                  |
-| IntelSearch      | `search`, `entity`                              |
-| DNS History      | `pdns`                                          |
-| WHOIS History    | `whois`                                         |
-| CertSearch       | `certSearch`                                    |
-| URL Scanner      | `urlScan`, `pivot`                              |
-| MalwareDB        | `malware`                                       |
-| Breach Lookup    | `breach`                                        |
-| WebSearch        | `webSearch`                                     |
-| Directory        | `directory`                                     |
-| Reverse Image    | `reverseImage` (romance, pig-butchering)        |
-| Money Trail      | `moneyTrail` (BEC, romance, tech-support, crypto) |
-| Social           | `social` (posts / DMs by text or handle)        |
-| Phone Lookup     | `phone` (carrier, line type, spam reports)      |
-| SMS              | `sms` (smishing messages)                       |
-| Document Lab     | `document` + `entity` (metadata exposes forgers)|
-| Audio Lab        | `audio` (voiceprint, synthetic score)           |
-| Payment          | `payment` (mule accounts, gift cards, wallets)  |
-| Complaints       | `complaints` (other victims' reports)           |
-| Evidence Map     | `graph`, `evidence`, `addEvidence`              |
-| Case Report      | `hint`, `submit`, `debrief`                      |
-| (meta)           | `scenarios` (list scam types + report fields)   |
-
-Use `api.async(...)` with `cas::Pending` and `poll()` once per frame so the
-window shows "Querying…" instead of freezing (example at the bottom of
-`ApiClient.hpp`).
 
 ## What makes it realistic (and hard)
 
@@ -193,6 +153,7 @@ Each item below is a real analyst skill the player has to use.
 
 | Layer | What the data does | Skill it forces |
 |---|---|---|
+| **The client** | The reporting party is a chat contact with one of nine personalities. Some hide the embarrassing part; a liar only admits it when shown proof; a rude client chases you every 75 seconds and can withdraw the case. | Interviewing a victim: asking the right question, noticing what's missing, confronting with evidence. |
 | **Time-bounded DNS** | Every `resolves_to` edge has a valid-time range. The domain later points to a **sinkhole**, and the IP hosted other sites months earlier. | "Where did it point *at the moment of the click*?" |
 | **CDN fronting** | On harder cases the domain sits behind a shared CDN IP with hundreds of benign neighbours and a shared edge certificate. | Find the origin in older DNS history. |
 | **Compromised redirector** | The email link goes to a *legitimate* small-business site that was hacked. | The first domain is a victim, not the attacker. |

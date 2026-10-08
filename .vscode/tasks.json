@@ -1,0 +1,131 @@
+{
+  // Run these from the Command Palette: Ctrl+Shift+P -> "Tasks: Run Task".
+  // First time on a new machine: "Setup: everything (first time)".
+  // Every day after that: "Run game (database + API + client)", then open http://localhost:5173
+  // The Python paths assume the venv lives in backend/.venv (the Setup task creates it).
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Setup: 1. Python venv + server packages",
+      "type": "process",
+      "command": "python",
+      "args": ["-c", "import subprocess,sys,os; os.path.isdir('.venv') or subprocess.check_call([sys.executable,'-m','venv','.venv']); py=os.path.join('.venv','Scripts' if os.name=='nt' else 'bin','python'); subprocess.check_call([py,'-m','pip','install','-q','-r','server/requirements.txt']); print('server packages installed')"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup: 2. backend/.env from the example",
+      "type": "process",
+      "command": "python",
+      "args": ["-c", "import os,shutil; os.path.exists('.env') or shutil.copy('.env.example','.env'); print('backend/.env ready')"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup: 3. client packages (npm install)",
+      "type": "npm",
+      "script": "install",
+      "path": "frontend",
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: start Postgres (Docker)",
+      "type": "process",
+      "command": "docker",
+      "args": ["compose", "up", "-d", "--wait"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: stop Postgres (Docker)",
+      "type": "process",
+      "command": "docker",
+      "args": ["compose", "down"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: apply migrations",
+      "type": "process",
+      "command": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe" },
+      "args": ["scripts/migrate.py"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: seed the world (wipes all cases)",
+      "type": "process",
+      "command": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe" },
+      "args": ["-m", "server.generator.world"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Setup: everything (first time)",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Setup: 1. Python venv + server packages",
+        "Setup: 2. backend/.env from the example",
+        "Setup: 3. client packages (npm install)",
+        "DB: start Postgres (Docker)",
+        "DB: apply migrations",
+        "DB: seed the world (wipes all cases)"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "API: run server",
+      "type": "process",
+      "command": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe" },
+      "args": ["-m", "uvicorn", "server.app:app", "--port", "8000"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "uvicorn",
+        "pattern": { "regexp": "^(ERROR):\\s+(.*)$", "severity": 1, "message": 2 },
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "Started server process|Waiting for application startup",
+          "endsPattern": "Application startup complete|Uvicorn running on"
+        }
+      }
+    },
+    {
+      "label": "Client: run dev server",
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^(error)\\s+(.*)$", "severity": 1, "message": 2 },
+        "background": { "activeBegins": true, "beginsPattern": "VITE|vite", "endsPattern": "ready in|Local:" }
+      }
+    },
+    {
+      "label": "Client: build for production (served by the API at :8000)",
+      "type": "npm",
+      "script": "build",
+      "path": "frontend",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "Run game (database + API + client)",
+      "dependsOrder": "sequence",
+      "dependsOn": ["DB: start Postgres (Docker)", "API: run server", "Client: run dev server"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: playtest every scenario (API must be running)",
+      "type": "process",
+      "command": "${workspaceFolder}/backend/.venv/bin/python",
+      "windows": { "command": "${workspaceFolder}\\backend\\.venv\\Scripts\\python.exe" },
+      "args": ["scripts/playtest.py", "1"],
+      "options": { "cwd": "${workspaceFolder}/backend" },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -335,6 +335,8 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=int(os.environ.get("WORLD_SEED", "1337")))
     ap.add_argument("--people-csv", type=Path, default=Path("data/osint_public_profiles_dataset.csv"))
     args = ap.parse_args()
+    from ..env import load_env
+    load_env()
     url = os.environ.get("DATABASE_URL")
     if not url:
         sys.exit("DATABASE_URL is not set (copy .env.example to .env)")

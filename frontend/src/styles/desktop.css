@@ -1,0 +1,630 @@
+/* The SleuthOS shell: wallpaper, icons, windows, taskbar, Start menu, toasts, overlays. */
+.desktop {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(var(--desktop-top), var(--desktop-bottom));
+  color: var(--text-invert);
+}
+.wallpaper {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.watermark {
+  position: absolute;
+  right: 22px;
+  bottom: 60px;
+  text-align: right;
+  font-size: 16px;
+  letter-spacing: 0.1em;
+  color: rgba(110, 140, 170, 0.4);
+}
+.watermark-sub {
+  font-size: 11px;
+  color: rgba(110, 140, 170, 0.3);
+}
+.desk-area {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 44px;
+}
+
+/* ------------------------------------------------------------ icons */
+.icons {
+  position: absolute;
+  inset: 12px auto 12px 12px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(auto-fill, 86px);
+  grid-auto-columns: 88px;
+  gap: 4px;
+}
+.icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: #dbe6f1;
+  cursor: pointer;
+}
+.icon:hover,
+.icon:focus-visible {
+  background: rgba(120, 180, 230, 0.13);
+  border-color: rgba(120, 180, 230, 0.25);
+}
+.icon-tile {
+  position: relative;
+  width: 44px;
+  height: 40px;
+  border: 1px solid;
+  border-radius: 6px;
+  background: #eef2f7;
+  overflow: hidden;
+}
+.icon-cap {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 7px;
+}
+.icon-glyph {
+  position: absolute;
+  inset: 9px 0 0;
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text);
+}
+.icon-label {
+  max-width: 86px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.icon-badge,
+.task-badge,
+.title-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.icon-badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+}
+
+/* ------------------------------------------------------------ windows */
+.window {
+  position: absolute;
+  flex-direction: column;
+  border: 1px solid var(--win-border);
+  border-radius: 6px 6px 3px 3px;
+  background: var(--win-body);
+  color: var(--text);
+  box-shadow: 6px 8px 26px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.window.active {
+  border-color: #47698a;
+  box-shadow: 6px 10px 34px rgba(0, 0, 0, 0.6);
+}
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  height: 30px;
+  padding: 0 4px 0 9px;
+  background: var(--title-idle);
+  color: var(--title-text);
+  user-select: none;
+  touch-action: none;
+  cursor: grab;
+}
+.window.active .titlebar {
+  background: linear-gradient(#245582, var(--title-active));
+}
+.title-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  flex: none;
+}
+.title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.title-buttons {
+  display: flex;
+  gap: 3px;
+}
+.tb-btn {
+  width: 26px;
+  height: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tb-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.tb-close:hover {
+  background: #c13a3a;
+}
+.window-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  touch-action: none;
+  background: linear-gradient(135deg, transparent 50%, #9aa5b2 50%, #9aa5b2 58%, transparent 58%, transparent 70%,
+      #9aa5b2 70%, #9aa5b2 78%, transparent 78%);
+}
+
+/* ------------------------------------------------------------ taskbar */
+.taskbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-top: 1px solid var(--taskbar-edge);
+  background: var(--taskbar);
+  z-index: 9000;
+}
+.start-btn {
+  flex: none;
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 5px;
+  background: #22303f;
+  color: #e2ecf6;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.start-btn:hover {
+  background: #2c3e52;
+}
+.start-btn.open {
+  background: var(--accent-dark);
+}
+.task-buttons {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  overflow: hidden;
+}
+.task-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 150px;
+  min-width: 70px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 3px solid;
+  border-radius: 4px;
+  background: #1d2733;
+  color: #d4e0ec;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.task-btn:hover {
+  background: #27354a;
+}
+.task-btn.active {
+  background: #31445a;
+}
+.task-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tray {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+  font-size: 11.5px;
+  color: #93aec7;
+}
+.tray-mood {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid #2c3d50;
+  border-radius: 12px;
+  background: none;
+  color: #c2d4e6;
+  cursor: pointer;
+}
+.tray-case {
+  color: #b4d2ec;
+}
+.tray-net {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tray-clock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  color: #e2ecf6;
+  font-size: 13px;
+  line-height: 1.15;
+}
+.tray-date {
+  font-size: 10px;
+  color: #8ca4bc;
+}
+
+/* ------------------------------------------------------------ start menu */
+.start-menu {
+  position: absolute;
+  left: 8px;
+  bottom: 50px;
+  width: 330px;
+  max-height: calc(100% - 70px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--taskbar-edge);
+  border-radius: 6px;
+  background: #1e2a37;
+  box-shadow: var(--shadow);
+  z-index: 9100;
+  overflow: hidden;
+}
+.start-head {
+  padding: 10px 14px;
+  background: var(--accent-dark);
+}
+.start-title {
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.start-sub {
+  font-size: 11px;
+  color: #b4d0e6;
+}
+.start-apps {
+  overflow-y: auto;
+  padding: 4px 6px;
+}
+.start-group-label {
+  margin: 8px 8px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7e9ab6;
+  text-transform: uppercase;
+}
+.start-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #dbe6f1;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.start-item:hover {
+  background: #2f4459;
+}
+.start-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+.start-foot {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid #33455a;
+}
+
+/* ------------------------------------------------------------ toasts */
+.toasts {
+  position: absolute;
+  right: 14px;
+  bottom: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 9200;
+  pointer-events: none;
+}
+.toast {
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 0;
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: #f4f6fa;
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  text-align: left;
+  font-size: 13px;
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-in 0.2s ease-out;
+}
+.toast-error {
+  border-left-color: var(--danger);
+}
+.toast-chat {
+  border-left-color: #3a8f5c;
+}
+.toast-from {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #2d7a4c;
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------ overlays */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9500;
+}
+.window .overlay {
+  position: absolute;
+}
+.overlay-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  overflow: auto;
+  padding: 20px 22px;
+  border: 1px solid var(--win-border);
+  border-radius: 6px;
+  background: var(--win-panel);
+  color: var(--text);
+}
+.overlay-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.manual {
+  width: 100%;
+  max-width: 700px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  background: var(--win-panel);
+  color: var(--text);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.manual-head {
+  padding: 10px 16px;
+  background: var(--title-active);
+  color: var(--title-text);
+  font-weight: 700;
+}
+.manual-body {
+  padding: 16px 20px;
+  overflow: auto;
+  font-size: 13.5px;
+}
+.manual-body h4 {
+  margin: 16px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--accent-dark);
+}
+.manual-body ol {
+  padding-left: 20px;
+  margin: 0;
+}
+.manual-body li {
+  margin: 3px 0;
+}
+.manual-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  border-top: 1px solid #d6dde6;
+}
+
+@media (max-width: 900px) {
+  .tray-case,
+  .tray-net {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------ tutorial */
+/* the coach panel sits above the taskbar, right of the icon columns, under menus and overlays */
+.tour {
+  position: absolute;
+  z-index: 8900;
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--gold);
+  border-radius: 6px;
+  background: var(--win-panel);
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+.tour-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tour-eyebrow {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--accent-dark);
+}
+.tour-x {
+  width: 24px;
+  height: 22px;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tour-x:hover {
+  background: var(--btn);
+  color: var(--text);
+}
+.tour-progress {
+  height: 4px;
+  margin: 6px 0 2px;
+  border-radius: 2px;
+  background: #d3d9e1;
+  overflow: hidden;
+}
+.tour-progress > div {
+  height: 100%;
+  background: var(--gold);
+  transition: width 0.4s ease;
+}
+.tour-cheer {
+  margin-top: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ok);
+}
+.tour-title {
+  margin: 8px 0 4px;
+  font-size: 16px;
+}
+.tour-text {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.tour-warn {
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--warn);
+  background: #fbf3e2;
+  font-size: 12.5px;
+}
+.tour-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.tour-skip {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+.tour-pill {
+  position: absolute;
+  z-index: 8900;
+  max-width: calc(100vw - 32px);
+  padding: 7px 12px;
+  overflow: hidden;
+  border: 1px solid var(--gold);
+  border-radius: 16px;
+  background: var(--win-panel);
+  box-shadow: var(--shadow);
+  color: var(--accent-dark);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+/* the glowing ring around what to click next; never blocks the click */
+.tour-ring {
+  position: fixed;
+  z-index: 8890;
+  border: 3px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(232, 178, 63, 0.25), 0 0 18px rgba(232, 178, 63, 0.7);
+  pointer-events: none;
+  transition: left 0.2s, top 0.2s, width 0.2s, height 0.2s;
+  animation: tour-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tour-pulse {
+  50% {
+    box-shadow: 0 0 0 8px rgba(232, 178, 63, 0.1), 0 0 26px rgba(232, 178, 63, 0.9);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring {
+    animation: none;
+    transition: none;
+  }
+}
+/* toasts step aside while the panel has the bottom-right corner */
+.desktop:has(.tour[data-corner='br']) .toasts {
+  right: calc(min(380px, 100vw - 32px) + 28px);
+}

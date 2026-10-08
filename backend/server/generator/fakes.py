@@ -88,6 +88,18 @@ FAKE_ALERT_ARTIFACTS = [
     "history.pushState loop (back button disabled)", "fake system-scan animation",
     "keyboard capture to block closing the tab", "obfuscated JS from a known scareware template",
 ]
+# what a scan of a fake "age verification" billing page turns up
+FAKE_AGEGATE_ARTIFACTS = [
+    "'enter your card to confirm you are 18+' form",
+    "card number posted to /api/charge.php on submit",
+    "pre-ticked $39.99/month 'premium access' box below the fold",
+    "email address required before the age check",
+    "copied age-gate template with a renamed logo",
+    "no company name, address or terms of service anywhere",
+]
+# passwords a breached shopping site leaked (fictional; quoted by sextortion mail)
+OLD_PASSWORDS = ["sunflower22", "Tigers2016!", "bluemoon87", "Pepper#2015", "letmein1987", "Kayak2018!",
+                 "summerlake9", "Bulldog#22"]
 X_MAILERS = ["PHPMailer 6.5.0", "PHPMailer 6.1.4", "Microsoft Outlook 16.0", "BulkMailr 3.2",
              "Swift Mailer 5.4", None]
 

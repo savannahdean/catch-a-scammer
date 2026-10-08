@@ -1,0 +1,50 @@
+# Render Blueprint: the game and its database. See docs/DEPLOY_RENDER.md.
+# In Render: New > Blueprint, pick this repo, and Render creates both.
+#
+# Both start on the FREE plans, so trying it costs nothing. Before you collect
+# real data, upgrade in the dashboard (the walkthrough explains):
+#   - a free database is DELETED 30 days after it's created, study data and all
+#   - a free web service sleeps after 15 idle minutes; the next visitor waits about a minute
+
+services:
+  - type: web
+    name: catch-a-scammer
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: catch-a-scammer-db
+          property: connectionString
+      - key: DB_POOL_MAX
+        value: "5"
+      - key: WORLD_SEED
+        value: "1337"
+      # the research study: leave off until you have approval (docs/STUDY_DATA.md)
+      - key: STUDY_ENABLED
+        value: "off"
+      # the old UUID API skips case keys, and the API docs aren't for players
+      - key: LEGACY_API
+        value: "off"
+      - key: API_DOCS
+        value: "off"
+      # per player IP, count/seconds
+      - key: RATE_NEW_CASE
+        value: "20/3600"
+      - key: RATE_MESSAGE
+        value: "40/60"
+      - key: RATE_JOIN_STUDY
+        value: "10/3600"
+      - key: RATE_ANSWERS
+        value: "20/3600"
+
+databases:
+  - name: catch-a-scammer-db
+    databaseName: osint
+    user: cas
+    postgresMajorVersion: "16"
+    plan: free
+    # only the game can connect; add your own IP in the dashboard when you export the study data
+    ipAllowList: []

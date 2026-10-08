@@ -1,6 +1,6 @@
 """Record "cards" for the desktop client's investigation tools.
 
-The C++ client draws one generic card shape, so every tool (social search,
+The React client draws one generic card shape, so every tool (social search,
 reverse image, phone lookup, document lab, money trail, ...) is described
 here, server-side. That keeps the client a thin renderer with no game logic,
 and it means a new tool is a route plus a builder in this file.
@@ -101,6 +101,7 @@ def short_platform(p: str) -> str:
     return p.split(" (")[0] if p else ""
 
 
+WALLET_RE = re.compile(r"\b(?:bc1q[0-9a-z]{20,60}|T[1-9A-HJ-NP-Za-km-z]{33})\b")
 URL_RE = re.compile(r"(https?://[^\s\"'<>)]+|\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:example|test)(?:/[^\s\"'<>)]*)?)", re.I)
 PHONE_RE = re.compile(r"\(\d{3}\) \d{3}-\d{4}|\+1\d{10}")
 
@@ -183,9 +184,13 @@ def pivot_rows(*items: tuple[str, str, str]) -> Optional[dict]:
     return rows("PIVOTS", [row(t, "OPEN >", "", act=open_(a, q)) for t, a, q in items if q])
 
 
-def indicator_row(ind: str) -> dict:
+def indicator_row(ctx: Ctx, ind: str) -> dict:
     """Send an indicator a victim listed to the tool that understands it."""
     i = ind.strip()
+    if ctx.conn.execute("""select 1 from payment_accounts p join entities e on e.id=p.entity_id
+                           where p.identifier=%s and (e.case_id is null or e.case_id=%s) limit 1""",
+                        (i, ctx.cid)).fetchone():
+        return row(i, "PAYMENTS >", act=open_("payments", i))
     if PHONE_RE.fullmatch(i) or re.fullmatch(r"\+?\d{10,12}", i):
         return row(i, "PHONE LOOKUP >", act=open_("phone", i))
     if re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}|bc1q\w+", i):
@@ -402,7 +407,8 @@ def audio_card(ctx: Ctx, eid: UUID) -> dict:
 
 METHOD = {"bank_wire": "Bank wire", "gift_card": "Gift cards (codes read out or photographed)",
           "p2p_app": "Peer-to-peer payment app", "money_transfer": "Money-transfer service",
-          "crypto_exchange": "Crypto exchange account"}
+          "crypto_exchange": "Crypto exchange account",
+          "card_merchant": "Card merchant account (the name on a card statement)"}
 
 
 def payment_card(ctx: Ctx, eid: UUID) -> dict:
@@ -449,7 +455,7 @@ def complaint_card(ctx: Ctx, eid: UUID) -> dict:
                 fields=[("Filed", dt(cm["filed_at"])), ("Reporter region", cm["reporter_region"]),
                         ("Reported loss", money(cm["loss_amount"]))],
                 blocks=[text("WHAT HAPPENED (in the reporter's words)", cm["narrative"]),
-                        rows("INDICATORS THE REPORTER LISTED", [indicator_row(i) for i in cm["indicators"]],
+                        rows("INDICATORS THE REPORTER LISTED", [indicator_row(ctx, i) for i in cm["indicators"]],
                              "Reports are unverified. Similar stories can come from different crews.")],
                 pin_label=f"Fraud report {cm['v']}")
 
@@ -465,6 +471,7 @@ def email_card(ctx: Ctx, eid: UUID) -> dict:
         if not any(u in l["text"] for l in links):
             links.append(row(u, "URL SCANNER >", act=open_("urlscan", u)))
     att = [row(a["label"], "DOCUMENT LAB >", act=fetch_card(ctx, a["id"], "doclab")) for a in edges(ctx, eid, "attached")]
+    wallets = [row(w, "MONEY TRAIL >", act=open_("moneytrail", w)) for w in dict.fromkeys(WALLET_RE.findall(m["body_text"]))]
     from_addr = re.search(r"<([^>]+)>", m["header_from"])
     from_addr = from_addr.group(1) if from_addr else m["header_from"]
     piv = [(f"Sender domain {from_addr.split('@')[-1]} in IntelSearch", "intelsearch", from_addr.split("@")[-1]),
@@ -483,6 +490,7 @@ def email_card(ctx: Ctx, eid: UUID) -> dict:
                 blocks=[text("BODY", m["body_text"]),
                         rows("LINKS IN MESSAGE", links, "The visible text of a link can differ from where it goes."),
                         rows("ATTACHMENTS", att),
+                        rows("CRYPTO ADDRESSES IN MESSAGE", wallets, "Payment demanded here can be traced on the blockchain."),
                         rows("RECEIVED CHAIN (newest hop first)", hops,
                              "Read from the bottom up. The last hop you can't verify is where the mail really started."),
                         text("RAW HEADERS", m["raw_headers"], mono=True),

@@ -1,4 +1,4 @@
-"""Apply supabase/migrations/*.sql in order, once each (tracked in _migrations).
+"""Apply database/migrations/*.sql in order, once each (tracked in _migrations).
 
 Works on a fresh database and on one where 001/002 were already applied by hand
 with psql (it detects the existing schema and marks those as done).
@@ -10,8 +10,13 @@ from pathlib import Path
 
 import psycopg
 
-url = os.environ.get("DATABASE_URL") or sys.exit("DATABASE_URL not set")
-files = sorted(Path("supabase/migrations").glob("*.sql"))
+BACKEND = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(BACKEND))
+from server.env import load_env  # noqa: E402  (backend/.env -> DATABASE_URL)
+
+load_env()
+url = os.environ.get("DATABASE_URL") or sys.exit("DATABASE_URL not set (copy .env.example to .env)")
+files = sorted((BACKEND / "database" / "migrations").glob("*.sql"))
 with psycopg.connect(url, prepare_threshold=None, autocommit=True) as conn:
     conn.execute("create table if not exists public._migrations (name text primary key, applied_at timestamptz default now())")
     conn.execute("alter table public._migrations enable row level security")

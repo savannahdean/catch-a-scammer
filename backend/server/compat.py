@@ -1,12 +1,14 @@
-"""API for the raylib desktop client (client/src), under /api.
+"""API for the React game client (frontend/), under /api.
 
-The client was written against an earlier API dialect:
-  * integer case and entity IDs   (long long everywhere)
+The client speaks this dialect:
+  * integer case and entity IDs (the `seq` identity columns)
   * /api/... routes
   * flat record shapes for the original tools (domain_name, ip_address, ...)
 This module serves that dialect on top of the UUID/entity backend, and adds
-the tools the 11 scam scenarios need. Those newer tools all return generic
+the tools the 12 scam scenarios need. Those newer tools all return generic
 "cards" (server/cards.py), so the client draws them with one renderer.
+The client Messenger lives in server/messenger.py and the research study in
+server/study.py; both are mounted next to this router in server/app.py.
 
 Integer ids are the `seq` identity columns on cases and entities.
 
@@ -27,13 +29,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from . import scoring
+from . import messenger, scoring
 from .cards import (Ctx, card_for, case_int, ent_int, host_of, image_card, status_of, to_e164,
                     URL_RE, BUILDERS)
 from .db import tx
+from .guard import case_by_seq, rate_limit
 from .generator.registry import SCENARIOS, generate_case
 
 router = APIRouter(prefix="/api")
@@ -44,10 +47,8 @@ VICTIM_TZ = timezone(timedelta(hours=-5), "CDT")
 
 # --------------------------------------------------------------------------- ids & helpers
 def case_uuid(conn, n: int) -> UUID:
-    row = conn.execute("select id from cases where seq=%s", (n,)).fetchone()
-    if not row:
-        raise HTTPException(404, "unknown case")
-    return row["id"]
+    """The case with this number, if the request carries its X-Case-Key (server/guard.py)."""
+    return case_by_seq(conn, n)
 
 
 def ent_uuid(conn, n: int) -> Optional[UUID]:
@@ -93,6 +94,8 @@ class NewCase(BaseModel):
     difficulty: str = "medium"
     player: Optional[str] = None
     scenario: Optional[str] = None
+    personality: Optional[str] = None       # client personality key, or "random" (dealt by difficulty)
+    participant_id: Optional[UUID] = None   # study participant playing this case, if any
 
 
 def clue_of(conn, cid: UUID) -> Optional[dict]:
@@ -128,6 +131,8 @@ def brief_payload(conn, cid: UUID) -> dict:
     briefing = (f"REPORTED BY: {c['victim_name']}, {c['victim_role']}, {c['victim_org']}\n"
                 f"INCIDENT:    {loc(c['incident_at'])}\nREPORTED:    {loc(c['reported_at'])}\n\n{c['briefing']}")
     fields = [{"key": k, "label": v["label"], "kind": v["kind"]} for k, v in (ordered_slots(conn, cid).items() if gt else [])]
+    client = conn.execute("""select cc.personality, p.label from case_client cc join client_profiles p on p.key=cc.personality
+                             where cc.case_id=%s""", (cid,)).fetchone()
     return {
         "case_id": case_int(conn, cid),
         "case_code": c["case_code"],
@@ -141,11 +146,14 @@ def brief_payload(conn, cid: UUID) -> dict:
         "hints_used": c["hints_used"],
         "status": c["status"],
         "score": c["score"] or 0,
-        "resolution_text": (gt["resolution_text"] if (gt and c["status"] == "solved") else ""),
+        "resolution_text": (gt["resolution_text"] if (gt and c["status"] in ("solved", "failed")) else ""),
+        "victim_name": c["victim_name"],
+        "client": {"name": c["victim_name"], "personality": client["personality"], "label": client["label"]}
+                  if client else None,
     }
 
 
-@router.post("/cases")
+@router.post("/cases", dependencies=[Depends(rate_limit("new_case", "20/3600"))])
 def new_case(body: NewCase):
     scenario = body.scenario or "random"
     if scenario == "random":
@@ -159,7 +167,13 @@ def new_case(body: NewCase):
             raise HTTPException(400, str(e))
         finally:
             conn.row_factory = dict_row
-        return brief_payload(conn, cid)
+        if body.participant_id and conn.execute("select 1 from study_participants where id=%s",
+                                                (body.participant_id,)).fetchone():
+            conn.execute("update cases set participant_id=%s where id=%s", (body.participant_id, cid))
+        messenger.init_client(conn, cid, messenger.pick_personality(conn, body.difficulty, body.personality))
+        key = conn.execute("select access_key::text k from cases where id=%s", (cid,)).fetchone()["k"]
+        # the only time the key is sent: the client keeps it and sends it back as X-Case-Key
+        return {**brief_payload(conn, cid), "case_key": key}
 
 
 @router.get("/cases/{n}")
@@ -214,6 +228,9 @@ def exhibits(n: int):
                join entities e on e.id=r.dst_id
                where r.case_id=%s and s.name='Victim Report' and e.kind in ('payment_account','crypto_wallet')""",
             (cid,)).fetchall()]
+        # records the client is still holding back (they hand them over in the Messenger)
+        held = messenger.withheld(conn, cid)
+        items = [i for i in items if i not in held]
         c = conn.execute("select victim_name, victim_role, victim_org from cases where id=%s", (cid,)).fetchone()
         email = c["victim_name"].lower().replace(" ", ".") + "@midstate.example"
         cards, letters = [{
@@ -933,6 +950,7 @@ def pin(n: int, body: PinIn):
             raise HTTPException(409, "not discovered")
         case_visible(conn, cid, eid)
         conn.execute("insert into case_evidence(case_id, entity_id) values (%s,%s) on conflict do nothing", (cid, eid))
+        messenger.on_pin(conn, cid, eid)
         return _ev(conn, cid)
 
 
@@ -1054,6 +1072,7 @@ def submit(n: int, body: SubmitIn):
             conn.execute("update cases set status='solved', score=%s, closed_at=now() where id=%s", (res["score"], cid))
         else:
             conn.execute("update cases set attempts=attempts+1 where id=%s", (cid,))
+        messenger.on_report(conn, cid, res["correct"])
         attempt_no = conn.execute("select attempts from cases where id=%s", (cid,)).fetchone()["attempts"]
 
         hard = c["difficulty"] in ("hard", "expert")
@@ -1082,6 +1101,9 @@ def submit(n: int, body: SubmitIn):
                 notes.append(f"{len(res['disconnected_evidence'])} pinned record(s) don't connect to the chain.")
             if res["hint_penalty"]:
                 notes.append(f"Hints cost {res['hint_penalty']} points.")
+            for f in conn.execute("""select body from case_client_facts where case_id=%s and secret
+                                     and revealed_at is null""", (cid,)).fetchall():
+                notes.append("The client never told you: " + f["body"].lstrip(". "))
         elif hard:
             narrative = (f"{n_right} of {len(slots)} conclusions are correct. On this difficulty the desk won't say "
                          f"which. Re-check the weakest link in your chain.")

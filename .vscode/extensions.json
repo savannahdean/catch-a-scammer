@@ -1,0 +1,11 @@
+{
+  // VS Code offers to install these when you open the folder.
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.debugpy",
+    "ms-python.vscode-pylance",
+    "ms-azuretools.vscode-docker",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg"
+  ]
+}
