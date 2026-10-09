@@ -2,6 +2,9 @@
 
 An open-source intelligence (OSINT) investigation game, built for our Database Management Systems course.
 
+**➤ Play it now: [catch-a-scammer.onrender.com] (https://catch-a-scammer.onrender.com/)**.
+Just open the website; there is nothing to install. Everything below is only for editing the game yourself.
+
 Someone has been scammed. You play an analyst on **SleuthOS**, a fake investigator desktop. You read the case, **question the client** in a chat app (some of them lie), and follow the evidence through about twenty tools: DNS history, WHOIS, certificate logs, URL scans, social media, reverse image search, phone lookups, breach data, money trails and more. Then you name who is behind it, without being fooled by decoys.
 
 - **12 scam types**: phishing (bulk, spear, whaling, clone, angler), smishing, voice-clone vishing, romance, advance-fee, tech-support, pig-butchering and adult-site ad sextortion. Every case is generated fresh.
@@ -29,7 +32,7 @@ Someone has been scammed. You play an analyst on **SleuthOS**, a fake investigat
 
 ---
 
-## 1. What to download
+## 1. What to download (developers only)
 
 Install these once. The versions are what we test with; newer is fine.
 
